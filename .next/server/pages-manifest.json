@@ -1,0 +1,9 @@
+{
+  "/_app": "pages/_app.js",
+  "/_error": "pages/_error.js",
+  "/_document": "pages/_document.js",
+  "/api/trips/[tripId]": "pages/api/trips/[tripId].js",
+  "/api/trips/[tripId]/unlock": "pages/api/trips/[tripId]/unlock.js",
+  "/api/trips": "pages/api/trips.js",
+  "/api/trips/[tripId]/travelers": "pages/api/trips/[tripId]/travelers.js"
+}

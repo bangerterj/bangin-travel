@@ -1,0 +1,745 @@
+{
+    "trip": {
+        "id": "japan-2026",
+        "name": "Japan 2026",
+        "destination": "Tokyo & Nagano",
+        "startDate": "2026-03-18",
+        "endDate": "2026-04-01",
+        "timezone": "Asia/Tokyo",
+        "coverImage": null
+    },
+    "travelers": [
+        {
+            "id": "t1",
+            "name": "Alex Smith",
+            "email": "alex@email.com",
+            "initials": "AS",
+            "color": "#3498db",
+            "isOrganizer": true
+        },
+        {
+            "id": "t2",
+            "name": "Sam Johnson",
+            "email": "sam@email.com",
+            "initials": "SJ",
+            "color": "#e74c3c",
+            "isOrganizer": false
+        },
+        {
+            "id": "t3",
+            "name": "Jake Williams",
+            "email": "jake@email.com",
+            "initials": "JW",
+            "color": "#2ecc71",
+            "isOrganizer": false
+        },
+        {
+            "id": "t4",
+            "name": "Maya Chen",
+            "email": "maya@email.com",
+            "initials": "MC",
+            "color": "#9b59b6",
+            "isOrganizer": false
+        }
+    ],
+    "flights": [
+        {
+            "id": "f1",
+            "type": "departure",
+            "airline": "United Airlines",
+            "flightNumber": "UA 837",
+            "departureAirport": "SLC",
+            "departureCity": "Salt Lake City",
+            "arrivalAirport": "NRT",
+            "arrivalCity": "Tokyo Narita",
+            "departureTime": "2026-03-18T06:30:00",
+            "arrivalTime": "2026-03-19T15:15:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "confirmationCode": "ABC123XY",
+            "notes": "Window seats reserved. Meal: Asian Vegetarian."
+        },
+        {
+            "id": "f2",
+            "type": "internal",
+            "airline": "ANA",
+            "flightNumber": "NH 987",
+            "departureAirport": "HND",
+            "departureCity": "Tokyo Haneda",
+            "arrivalAirport": "CTS",
+            "arrivalCity": "Sapporo",
+            "departureTime": "2026-03-25T09:00:00",
+            "arrivalTime": "2026-03-25T10:35:00",
+            "travelers": [
+                "t1",
+                "t2"
+            ],
+            "confirmationCode": "NH9876AB",
+            "notes": "Jake & Maya staying in Tokyo this day."
+        },
+        {
+            "id": "f3",
+            "type": "internal",
+            "airline": "ANA",
+            "flightNumber": "NH 992",
+            "departureAirport": "CTS",
+            "departureCity": "Sapporo",
+            "arrivalAirport": "HND",
+            "arrivalCity": "Tokyo Haneda",
+            "departureTime": "2026-03-27T14:00:00",
+            "arrivalTime": "2026-03-27T15:40:00",
+            "travelers": [
+                "t1",
+                "t2"
+            ],
+            "confirmationCode": "NH9877CD",
+            "notes": ""
+        },
+        {
+            "id": "f4",
+            "type": "return",
+            "airline": "Delta",
+            "flightNumber": "DL 295",
+            "departureAirport": "NRT",
+            "departureCity": "Tokyo Narita",
+            "arrivalAirport": "SLC",
+            "arrivalCity": "Salt Lake City",
+            "departureTime": "2026-04-01T17:30:00",
+            "arrivalTime": "2026-04-01T14:45:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "confirmationCode": "DL789012",
+            "notes": "Arrives same day due to time zone."
+        }
+    ],
+    "stays": [
+        {
+            "id": "s1",
+            "type": "hotel",
+            "name": "Shinjuku Granbell Hotel",
+            "address": "2-14-5 Kabukicho, Shinjuku, Tokyo",
+            "coordinates": {
+                "lat": 35.6938,
+                "lng": 139.7034
+            },
+            "checkIn": "2026-03-19T15:00:00",
+            "checkOut": "2026-03-22T11:00:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "confirmationCode": "GRAN-2026-1234",
+            "amenities": [
+                "wifi",
+                "breakfast",
+                "luggage-storage"
+            ],
+            "cost": {
+                "amount": 480,
+                "currency": "USD",
+                "perNight": 120
+            },
+            "notes": "Walking distance to Shinjuku Station."
+        },
+        {
+            "id": "s2",
+            "type": "ryokan",
+            "name": "Nagano Ryokan Fujiya",
+            "address": "1-2-3 Yamanouchi, Nagano",
+            "coordinates": {
+                "lat": 36.7333,
+                "lng": 138.4667
+            },
+            "checkIn": "2026-03-22T16:00:00",
+            "checkOut": "2026-03-24T10:00:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "confirmationCode": "FUJI-2026-5678",
+            "amenities": [
+                "onsen",
+                "kaiseki-dinner",
+                "tatami-rooms"
+            ],
+            "cost": {
+                "amount": 600,
+                "currency": "USD",
+                "perNight": 300
+            },
+            "notes": "Traditional Japanese inn. Shoes off at entrance!"
+        },
+        {
+            "id": "s3",
+            "type": "hotel",
+            "name": "Shibuya Stream Excel Hotel Tokyu",
+            "address": "3-21-3 Shibuya, Shibuya-ku, Tokyo",
+            "coordinates": {
+                "lat": 35.6580,
+                "lng": 139.7016
+            },
+            "checkIn": "2026-03-24T15:00:00",
+            "checkOut": "2026-03-28T11:00:00",
+            "travelers": [
+                "t3",
+                "t4"
+            ],
+            "confirmationCode": "TOKYU-2026-9012",
+            "amenities": [
+                "wifi",
+                "gym",
+                "restaurant"
+            ],
+            "cost": {
+                "amount": 560,
+                "currency": "USD",
+                "perNight": 140
+            },
+            "notes": "Jake & Maya staying here while Alex & Sam go to Sapporo."
+        },
+        {
+            "id": "s4",
+            "type": "hotel",
+            "name": "JR Tower Hotel Nikko Sapporo",
+            "address": "2 Kita 5 Jonishi, Chuo-ku, Sapporo",
+            "coordinates": {
+                "lat": 43.0687,
+                "lng": 141.3508
+            },
+            "checkIn": "2026-03-25T15:00:00",
+            "checkOut": "2026-03-27T11:00:00",
+            "travelers": [
+                "t1",
+                "t2"
+            ],
+            "confirmationCode": "NIKKO-2026-3456",
+            "amenities": [
+                "wifi",
+                "spa",
+                "breakfast",
+                "ski-shuttle"
+            ],
+            "cost": {
+                "amount": 320,
+                "currency": "USD",
+                "perNight": 160
+            },
+            "notes": "Connected to Sapporo Station. Ski gear storage available."
+        },
+        {
+            "id": "s5",
+            "type": "hotel",
+            "name": "Park Hyatt Tokyo",
+            "address": "3-7-1-2 Nishi-Shinjuku, Shinjuku-ku, Tokyo",
+            "coordinates": {
+                "lat": 35.6867,
+                "lng": 139.6912
+            },
+            "checkIn": "2026-03-28T15:00:00",
+            "checkOut": "2026-04-01T12:00:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "confirmationCode": "HYATT-2026-7890",
+            "amenities": [
+                "wifi",
+                "pool",
+                "spa",
+                "restaurant",
+                "bar"
+            ],
+            "cost": {
+                "amount": 1600,
+                "currency": "USD",
+                "perNight": 400
+            },
+            "notes": "Final nights! Lost in Translation vibes. Splurge stay."
+        }
+    ],
+    "transit": [
+        {
+            "id": "tr1",
+            "type": "train",
+            "name": "Narita Express to Shinjuku",
+            "route": "Narita Airport → Shinjuku Station",
+            "departureLocation": "Narita Airport Terminal 1",
+            "departureCoordinates": {
+                "lat": 35.7720,
+                "lng": 140.3929
+            },
+            "arrivalLocation": "Shinjuku Station",
+            "arrivalCoordinates": {
+                "lat": 35.6896,
+                "lng": 139.7006
+            },
+            "departureTime": "2026-03-19T16:00:00",
+            "arrivalTime": "2026-03-19T17:30:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "reservationRequired": true,
+            "confirmationCode": "JR-NEX-001",
+            "ticketType": "JR Pass (Reserved Seat)",
+            "cost": {
+                "amount": 0,
+                "currency": "JPY"
+            },
+            "notes": "Covered by JR Pass. Reserve seats at JR counter after landing."
+        },
+        {
+            "id": "tr2",
+            "type": "train",
+            "name": "Shinkansen to Nagano",
+            "route": "Tokyo Station → Nagano Station",
+            "departureLocation": "Tokyo Station",
+            "departureCoordinates": {
+                "lat": 35.6812,
+                "lng": 139.7671
+            },
+            "arrivalLocation": "Nagano Station",
+            "arrivalCoordinates": {
+                "lat": 36.6432,
+                "lng": 138.1884
+            },
+            "departureTime": "2026-03-22T08:30:00",
+            "arrivalTime": "2026-03-22T10:10:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "reservationRequired": true,
+            "confirmationCode": null,
+            "ticketType": "JR Pass (Reserved Seat)",
+            "cost": {
+                "amount": 0,
+                "currency": "JPY"
+            },
+            "notes": "Hokuriku Shinkansen. Reserve at JR counter day before."
+        },
+        {
+            "id": "tr3",
+            "type": "bus",
+            "name": "Nagaden Express Bus",
+            "route": "Nagano Station → Snow Monkey Park",
+            "departureLocation": "Nagano Station East Exit",
+            "departureCoordinates": {
+                "lat": 36.6432,
+                "lng": 138.1884
+            },
+            "arrivalLocation": "Kanbayashi Onsen (Snow Monkey Park)",
+            "arrivalCoordinates": {
+                "lat": 36.7333,
+                "lng": 138.4667
+            },
+            "departureTime": "2026-03-22T11:00:00",
+            "arrivalTime": "2026-03-22T11:45:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "reservationRequired": false,
+            "confirmationCode": null,
+            "ticketType": "Pay on board",
+            "cost": {
+                "amount": 1500,
+                "currency": "JPY"
+            },
+            "notes": "Runs every 30 minutes. No reservation needed."
+        },
+        {
+            "id": "tr4",
+            "type": "train",
+            "name": "Shinkansen to Tokyo",
+            "route": "Nagano Station → Tokyo Station",
+            "departureLocation": "Nagano Station",
+            "departureCoordinates": {
+                "lat": 36.6432,
+                "lng": 138.1884
+            },
+            "arrivalLocation": "Tokyo Station",
+            "arrivalCoordinates": {
+                "lat": 35.6812,
+                "lng": 139.7671
+            },
+            "departureTime": "2026-03-24T10:00:00",
+            "arrivalTime": "2026-03-24T11:40:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "reservationRequired": true,
+            "confirmationCode": null,
+            "ticketType": "JR Pass (Reserved Seat)",
+            "cost": {
+                "amount": 0,
+                "currency": "JPY"
+            },
+            "notes": ""
+        },
+        {
+            "id": "tr5",
+            "type": "subway",
+            "name": "Tokyo Metro to Shibuya",
+            "route": "Tokyo Station → Shibuya Station",
+            "departureLocation": "Tokyo Station",
+            "departureCoordinates": {
+                "lat": 35.6812,
+                "lng": 139.7671
+            },
+            "arrivalLocation": "Shibuya Station",
+            "arrivalCoordinates": {
+                "lat": 35.6580,
+                "lng": 139.7016
+            },
+            "departureTime": "2026-03-24T12:00:00",
+            "arrivalTime": "2026-03-24T12:25:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "reservationRequired": false,
+            "confirmationCode": null,
+            "ticketType": "IC Card (Suica/Pasmo)",
+            "cost": {
+                "amount": 200,
+                "currency": "JPY"
+            },
+            "notes": "Marunouchi Line. Get Suica cards at airport."
+        }
+    ],
+    "activities": [
+        {
+            "id": "a1",
+            "type": "sightseeing",
+            "name": "Senso-ji Temple & Asakusa",
+            "location": "Asakusa, Tokyo",
+            "coordinates": {
+                "lat": 35.7148,
+                "lng": 139.7967
+            },
+            "startTime": "2026-03-19T19:00:00",
+            "endTime": "2026-03-19T21:00:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "reservationRequired": false,
+            "confirmationCode": null,
+            "cost": {
+                "amount": 0,
+                "currency": "JPY"
+            },
+            "priority": "must-do",
+            "notes": "Beautiful at night! Nakamise shopping street for souvenirs.",
+            "links": []
+        },
+        {
+            "id": "a2",
+            "type": "tour",
+            "name": "TeamLab Borderless",
+            "location": "Azabudai Hills, Minato City",
+            "coordinates": {
+                "lat": 35.6617,
+                "lng": 139.7413
+            },
+            "startTime": "2026-03-20T10:00:00",
+            "endTime": "2026-03-20T14:00:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "reservationRequired": true,
+            "confirmationCode": "TL-2026-5678",
+            "cost": {
+                "amount": 4600,
+                "currency": "JPY"
+            },
+            "priority": "must-do",
+            "notes": "No flash photography. Wear comfortable shoes for walking.",
+            "links": [
+                "https://www.teamlab.art/e/borderless-azabudai/"
+            ]
+        },
+        {
+            "id": "a3",
+            "type": "dining",
+            "name": "Tsukiji Outer Market",
+            "location": "Tsukiji, Chuo City",
+            "coordinates": {
+                "lat": 35.6654,
+                "lng": 139.7707
+            },
+            "startTime": "2026-03-21T07:00:00",
+            "endTime": "2026-03-21T10:00:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "reservationRequired": false,
+            "confirmationCode": null,
+            "cost": {
+                "amount": 3000,
+                "currency": "JPY"
+            },
+            "priority": "must-do",
+            "notes": "Go early for freshest food! Cash recommended. Try tamagoyaki.",
+            "links": []
+        },
+        {
+            "id": "a4",
+            "type": "sightseeing",
+            "name": "Meiji Shrine & Harajuku",
+            "location": "Shibuya, Tokyo",
+            "coordinates": {
+                "lat": 35.6764,
+                "lng": 139.6993
+            },
+            "startTime": "2026-03-21T14:00:00",
+            "endTime": "2026-03-21T17:00:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "reservationRequired": false,
+            "confirmationCode": null,
+            "cost": {
+                "amount": 0,
+                "currency": "JPY"
+            },
+            "priority": "nice-to-have",
+            "notes": "Walk through Yoyogi Park. Takeshita Street for shopping.",
+            "links": []
+        },
+        {
+            "id": "a5",
+            "type": "sightseeing",
+            "name": "Snow Monkey Park (Jigokudani)",
+            "location": "Yamanouchi, Nagano",
+            "coordinates": {
+                "lat": 36.7333,
+                "lng": 138.4625
+            },
+            "startTime": "2026-03-22T13:00:00",
+            "endTime": "2026-03-22T16:00:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "reservationRequired": false,
+            "confirmationCode": null,
+            "cost": {
+                "amount": 800,
+                "currency": "JPY"
+            },
+            "priority": "must-do",
+            "notes": "30-minute walk from bus stop. Wear good shoes!",
+            "links": [
+                "https://jigokudani-yaenkoen.co.jp/en/"
+            ]
+        },
+        {
+            "id": "a6",
+            "type": "relaxation",
+            "name": "Onsen Evening at Ryokan",
+            "location": "Nagano Ryokan Fujiya",
+            "coordinates": {
+                "lat": 36.7333,
+                "lng": 138.4667
+            },
+            "startTime": "2026-03-22T18:00:00",
+            "endTime": "2026-03-22T21:00:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "reservationRequired": false,
+            "confirmationCode": null,
+            "cost": {
+                "amount": 0,
+                "currency": "JPY"
+            },
+            "priority": "must-do",
+            "notes": "Included with ryokan stay. Kaiseki dinner at 19:00.",
+            "links": []
+        },
+        {
+            "id": "a7",
+            "type": "entertainment",
+            "name": "Robot Restaurant",
+            "location": "Kabukicho, Shinjuku",
+            "coordinates": {
+                "lat": 35.6944,
+                "lng": 139.7036
+            },
+            "startTime": "2026-03-29T19:30:00",
+            "endTime": "2026-03-29T21:30:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "reservationRequired": true,
+            "confirmationCode": "ROBOT-2026-1111",
+            "cost": {
+                "amount": 8500,
+                "currency": "JPY"
+            },
+            "priority": "nice-to-have",
+            "notes": "Absolutely wild experience. Book in advance!",
+            "links": [
+                "https://www.robot-restaurant.com/"
+            ]
+        },
+        {
+            "id": "a8",
+            "type": "dining",
+            "name": "Sukiyabashi Jiro (Roppongi)",
+            "location": "Roppongi Hills, Tokyo",
+            "coordinates": {
+                "lat": 35.6605,
+                "lng": 139.7292
+            },
+            "startTime": "2026-03-30T12:00:00",
+            "endTime": "2026-03-30T13:30:00",
+            "travelers": [
+                "t1",
+                "t2"
+            ],
+            "reservationRequired": true,
+            "confirmationCode": "JIRO-2026-0330",
+            "cost": {
+                "amount": 33000,
+                "currency": "JPY"
+            },
+            "priority": "must-do",
+            "notes": "Omakase only. Follow all etiquette rules. Once in a lifetime!",
+            "links": []
+        },
+        {
+            "id": "a9",
+            "type": "shopping",
+            "name": "Akihabara Electronics & Anime",
+            "location": "Akihabara, Tokyo",
+            "coordinates": {
+                "lat": 35.7023,
+                "lng": 139.7745
+            },
+            "startTime": "2026-03-30T15:00:00",
+            "endTime": "2026-03-30T19:00:00",
+            "travelers": [
+                "t3",
+                "t4"
+            ],
+            "reservationRequired": false,
+            "confirmationCode": null,
+            "cost": {
+                "amount": 0,
+                "currency": "JPY"
+            },
+            "priority": "optional",
+            "notes": "Jake & Maya afternoon while Alex & Sam at Jiro.",
+            "links": []
+        },
+        {
+            "id": "a10",
+            "type": "sightseeing",
+            "name": "Tokyo Skytree",
+            "location": "Sumida, Tokyo",
+            "coordinates": {
+                "lat": 35.7101,
+                "lng": 139.8107
+            },
+            "startTime": "2026-03-31T17:00:00",
+            "endTime": "2026-03-31T19:00:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "reservationRequired": true,
+            "confirmationCode": "SKYTREE-2026-0331",
+            "cost": {
+                "amount": 3100,
+                "currency": "JPY"
+            },
+            "priority": "nice-to-have",
+            "notes": "Sunset views! Book Tembo Deck + Tembo Galleria combo.",
+            "links": [
+                "https://www.tokyo-skytree.jp/en/"
+            ]
+        },
+        {
+            "id": "a11",
+            "type": "dining",
+            "name": "Farewell Dinner - Gonpachi",
+            "location": "Nishi-Azabu, Tokyo",
+            "coordinates": {
+                "lat": 35.6589,
+                "lng": 139.7262
+            },
+            "startTime": "2026-03-31T20:00:00",
+            "endTime": "2026-03-31T22:30:00",
+            "travelers": [
+                "t1",
+                "t2",
+                "t3",
+                "t4"
+            ],
+            "reservationRequired": true,
+            "confirmationCode": "GONPACHI-2026-FINAL",
+            "cost": {
+                "amount": 6000,
+                "currency": "JPY"
+            },
+            "priority": "must-do",
+            "notes": "Kill Bill restaurant! Great way to end the trip.",
+            "links": [
+                "https://gonpachi.jp/nishi-azabu/"
+            ]
+        }
+    ],
+    "config": {
+        "role": "guest",
+        "activeTab": "summary"
+    }
+}

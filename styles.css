@@ -1,5 +1,0 @@
-@import url('https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;700&family=Outfit:wght@400;600;800&display=swap');
-:root { --primary-blue: #3498db; --accent-orange: #f39c12; --warm-sand: #fdfaf5; --dark-ink: #2c3e50; --sticker-white: #ffffff; --border-width: 3px; --shadow-retro: 6px 6px 0px 0px var(--dark-ink); --radius-retro: 12px; }
-body { background-color: var(--warm-sand); color: var(--dark-ink); font-family: 'Inter', sans-serif; }
-.hidden { display: none !important; }
-.btn-primary { background: var(--accent-orange); color: white; border: var(--border-width) solid var(--dark-ink); padding: 14px 30px; font-family: 'Bungee', cursive; cursor: pointer; border-radius: var(--radius-retro); }

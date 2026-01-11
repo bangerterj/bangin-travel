@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bangin' Travel</title>
+    <meta name="description"
+        content="A calm, reliable group trip coordination tool. One source of truth for your logistics.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Leaflet for maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+    <!-- App Styles -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div id="app" class="app-container">
+
+        <!-- Trips Selector View -->
+        <section id="trips-view" class="view">
+            <div id="trips-container"></div>
+        </section>
+
+        <!-- Main Dashboard View -->
+        <section id="dashboard-view" class="view hidden">
+            <header class="main-header">
+                <div class="header-content">
+                    <div class="header-left">
+                        <div class="brand">🚐 Bangin' Travel</div>
+                        <div id="trip-switcher-container"></div>
+                    </div>
+                    <nav class="main-nav">
+                        <button class="nav-tab active" data-tab="summary">Summary</button>
+                        <button class="nav-tab" data-tab="calendar">Calendar</button>
+                        <button class="nav-tab" data-tab="flights">Flights</button>
+                        <button class="nav-tab" data-tab="stays">Stays</button>
+                        <button class="nav-tab" data-tab="transit">Transit</button>
+                        <button class="nav-tab" data-tab="activities">Activities</button>
+                    </nav>
+                </div>
+            </header>
+            <main class="app-content">
+                <section id="tab-summary" class="tab-pane active"></section>
+                <section id="tab-calendar" class="tab-pane"></section>
+                <section id="tab-flights" class="tab-pane"></section>
+                <section id="tab-stays" class="tab-pane"></section>
+                <section id="tab-transit" class="tab-pane"></section>
+                <section id="tab-activities" class="tab-pane"></section>
+            </main>
+        </section>
+
+        <!-- Modal -->
+        <div id="modal-container" class="modal-overlay hidden">
+            <div class="modal-content">
+                <button class="modal-close">×</button>
+                <div id="modal-body"></div>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="notification-toast" class="toast hidden"></div>
+
+    </div>
+    <script src="app.js" type="module"></script>
+</body>
+
+</html>
