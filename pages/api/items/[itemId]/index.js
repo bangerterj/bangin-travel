@@ -4,8 +4,8 @@
  * DELETE - Delete an item
  */
 
-const { items, assignments } = require('../../../lib/db');
-const { verifyToken, extractToken } = require('../../../lib/auth');
+const { items, assignments } = require('../../../../lib/db');
+const { verifyToken, extractToken } = require('../../../../lib/auth');
 
 export default async function handler(req, res) {
     const { itemId } = req.query;

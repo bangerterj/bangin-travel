@@ -3,7 +3,7 @@ const nextConfig = {
     reactStrictMode: true,
     // Ensure sql.js is not bundled by webpack on the server
     experimental: {
-        serverExternalPackages: ['sql.js'],
+        serverComponentsExternalPackages: ['sql.js'],
     },
     // Keep static files served alongside API
     async rewrites() {

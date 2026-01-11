@@ -5,3 +5,5 @@ dist
 coverage
 npm-debug.log
 .gemini
+.next
+

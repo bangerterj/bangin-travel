@@ -4,8 +4,8 @@
  * POST - Assign travelers to an item (idempotent)
  */
 
-const { items, assignments, travelers } = require('../../../../lib/db');
-const { verifyToken, extractToken } = require('../../../../lib/auth');
+const { items, assignments, travelers } = require('../../../../../lib/db');
+const { verifyToken, extractToken } = require('../../../../../lib/auth');
 
 export default async function handler(req, res) {
     const { itemId } = req.query;
