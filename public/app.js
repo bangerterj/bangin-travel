@@ -59,6 +59,21 @@ class App {
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') this.closeModal();
         });
+
+        // Drag and Drop for Screenshots
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            this.modalOverlay.style.border = '4px dashed var(--accent-blue)';
+        });
+        document.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            this.modalOverlay.style.border = 'none';
+        });
+        document.addEventListener('drop', (e) => this.handleDrop(e));
+
+        // Paste support for Screenshots
+        document.addEventListener('paste', (e) => this.handlePaste(e));
+
         // Logo click navigation
         const logo = document.querySelector('.brand');
         if (logo) {
@@ -76,6 +91,148 @@ class App {
                 dropdown.classList.add('hidden');
             }
         });
+    }
+
+    async handleDrop(e) {
+        e.preventDefault();
+        this.modalOverlay.style.border = 'none';
+
+        const files = e.dataTransfer.files;
+        if (!files || files.length === 0) return;
+
+        this.handleImageFile(files[0]);
+    }
+
+    async handlePaste(e) {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for (const item of items) {
+            if (item.kind === 'file' && item.type.startsWith('image/')) {
+                const file = item.getAsFile();
+                this.handleImageFile(file);
+                // Prevent pasting the image into inputs if any are focused (optional, but good)
+                // e.preventDefault(); 
+                return;
+            }
+        }
+    }
+
+    async handleImageFile(file) {
+        if (!file.type.startsWith('image/')) {
+            this.showToast('Please use an image file (screenshot).');
+            return;
+        }
+
+        // Allow parsing even without a trip (for testing)
+        const trip = store.getActiveTrip();
+        if (!trip) {
+            console.log('No trip active, but proceeding with parse for demo purposes.');
+        }
+
+        this.showToast('✨ Analyzing screenshot with Gemini...');
+
+        try {
+            const base64 = await this.fileToBase64(file);
+            const result = await this.uploadImage(base64);
+
+            if (result.error) throw new Error(result.details || result.error);
+
+            const data = result.data;
+            this.showToast(`Found ${data.type}: ${data.title}`);
+
+            // Map API response to our internal format
+            const mappedData = this.mapScannedData(data);
+
+            // Switch to relevant tab and open modal
+            const typeMap = {
+                'flight': 'flights',
+                'stay': 'stays',
+                'transit': 'transit',
+                'activity': 'activities'
+            };
+            const tab = typeMap[data.type] || 'summary';
+
+            // Force tab switch if needed (only if we have a trip context to switch tabs in)
+            if (trip && this.tabPanes[tab]) {
+                this.switchTab(tab);
+            }
+
+            // Open modal with pre-filled data
+            this.openEntityModal(typeMap[data.type], mappedData);
+
+        } catch (error) {
+            console.error(error);
+            this.showToast(`Error: ${error.message || 'Failed to parse image'}`, 5000);
+        }
+    }
+
+    fileToBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+        });
+    }
+
+    async uploadImage(base64Image) {
+        const response = await fetch('/api/parse/image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64Image })
+        });
+        return await response.json();
+    }
+
+    mapScannedData(data) {
+        // Transform Gemini response to match our component schemas
+        const base = {
+            name: data.title, // 'title' from AI -> 'name' in most internal schemas
+            title: data.title, // Fallback
+            notes: data.notes || '',
+            // Try to map times
+            startAt: data.startAt,
+            endAt: data.endAt
+        };
+
+        // Type specific mapping
+        if (data.type === 'flight') {
+            const meta = data.metadata || {};
+            return {
+                ...base,
+                type: 'departure', // default to outbound
+                airline: meta.airline || data.title, // fallback
+                flightNumber: meta.flightNumber || '',
+                departureAirport: meta.departureAirport || '',
+                departureCity: '', // AI often misses city vs airport
+                arrivalAirport: meta.arrivalAirport || '',
+                arrivalCity: '',
+                departureTime: data.startAt,
+                arrivalTime: data.endAt,
+                confirmationCode: meta.confirmationCode || ''
+            };
+        }
+
+        if (data.type === 'stay') {
+            const meta = data.metadata || {};
+
+            // Auto-detect subtype (hotel, airbnb, etc)
+            let stayType = 'hotel';
+            const textContent = (data.title + ' ' + (data.notes || '')).toLowerCase();
+            if (textContent.includes('airbnb')) stayType = 'airbnb';
+            else if (textContent.includes('hostel')) stayType = 'hostel';
+            else if (textContent.includes('ryokan')) stayType = 'ryokan';
+
+            return {
+                ...base,
+                type: stayType,
+                address: meta.address || '',
+                checkIn: data.startAt,
+                checkOut: data.endAt,
+                confirmationCode: meta.confirmationCode || ''
+            };
+        }
+
+        return base;
     }
 
     switchTab(tabId) {
