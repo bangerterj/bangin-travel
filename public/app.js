@@ -131,7 +131,9 @@ class App {
         this.showToast('✨ Analyzing screenshot with Gemini...');
 
         try {
-            const base64 = await this.fileToBase64(file);
+            // Compress/Resize image before upload to avoid Vercel 4.5MB payload limit
+            this.showToast('✨ Compressing & analyzing...');
+            const base64 = await this.processImage(file);
             const result = await this.uploadImage(base64);
 
             if (result.error) throw new Error(result.details || result.error);
@@ -175,12 +177,68 @@ class App {
     }
 
     async uploadImage(base64Image) {
-        const response = await fetch('/api/parse/image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: base64Image })
+        try {
+            const response = await fetch('/api/parse/image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64Image })
+            });
+
+            const text = await response.text();
+            try {
+                const data = JSON.parse(text);
+                if (!response.ok) throw new Error(data.error || data.details || `Server Error: ${response.status}`);
+                return data;
+            } catch (jsonError) {
+                // If JSON parse fails, it's likely an HTML error page (404, 500, 504, 413)
+                console.error("Non-JSON Response:", text);
+                const statusText = response.statusText || 'Unknown Error';
+                // Extract title from HTML if possible or just use substring
+                const cleanText = text.replace(/<[^>]*>/g, '').substring(0, 100);
+                throw new Error(`Server Error (${response.status} ${statusText}): ${cleanText}`);
+            }
+        } catch (error) {
+            return { error: error.message };
+        }
+    }
+
+    processImage(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    // Resize if larger than 1280px (Vercel payload limit is 4.5MB, this ensures we are safely under)
+                    const MAX_DIM = 1280;
+                    if (width > MAX_DIM || height > MAX_DIM) {
+                        if (width > height) {
+                            height *= MAX_DIM / width;
+                            width = MAX_DIM;
+                        } else {
+                            width *= MAX_DIM / height;
+                            height = MAX_DIM;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // Compress to JPEG 0.7 quality
+                    // This typically results in ~200-500KB images
+                    resolve(canvas.toDataURL('image/jpeg', 0.7));
+                };
+                img.onerror = (e) => reject(e);
+            };
+            reader.onerror = (e) => reject(e);
         });
-        return await response.json();
     }
 
     mapScannedData(data) {
