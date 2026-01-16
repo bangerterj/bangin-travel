@@ -1,5 +1,5 @@
 /**
- * Transit Component - Transportation cards with reservation status
+ * Transit Component - Handles rendering and form for transportation data
  */
 
 export function renderTransit(container, store, callbacks) {
@@ -9,145 +9,110 @@ export function renderTransit(container, store, callbacks) {
   const { transit } = trip;
 
   const formatDateTime = (dateStr) => {
+    if (!dateStr) return { time: '', date: '' };
     const date = new Date(dateStr);
     return {
-      time: date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+      time: date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: false }),
       date: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
     };
-  };
-
-  const calculateDuration = (dep, arr) => {
-    const diff = new Date(arr) - new Date(dep);
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    if (hours === 0) return `${mins}m`;
-    return `${hours}h ${mins}m`;
   };
 
   const getTransitIcon = (type) => {
     const icons = {
       train: '🚄',
       bus: '🚌',
-      taxi: '🚕',
+      ferry: '⛴️',
       subway: '🚇',
-      ferry: '🚢',
-      rental_car: '🚗'
+      taxi: '🚕'
     };
-    return icons[type] || '🚏';
+    return icons[type] || '🚆';
   };
 
-  const getTransitLabel = (type) => {
-    const labels = {
-      train: 'Train',
-      bus: 'Bus',
-      taxi: 'Taxi/Private Transfer',
-      subway: 'Subway/Metro',
-      ferry: 'Ferry',
-      rental_car: 'Rental Car'
-    };
-    return labels[type] || type;
+  const calculateDuration = (start, end) => {
+    if (!start || !end) return '';
+    const diff = new Date(end) - new Date(start);
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    if (hours === 0 && mins === 0) return '';
+    return `${hours}h ${mins}m`;
   };
 
-  const isJRPassEligible = (ticketType) => {
-    return ticketType && ticketType.toLowerCase().includes('jr pass');
-  };
-
-  const transitCards = transit.map(t => {
-    const dep = formatDateTime(t.departureTime);
-    const arr = formatDateTime(t.arrivalTime);
-    const duration = calculateDuration(t.departureTime, t.arrivalTime);
-    const travelers = store.getTravelersByIds(t.travelers);
+  const transitCards = transit && transit.length > 0 ? transit.map(item => {
+    const dep = formatDateTime(item.departureTime);
+    const arr = formatDateTime(item.arrivalTime);
+    const duration = calculateDuration(item.departureTime, item.arrivalTime);
+    const travelers = item.travelers ? store.getTravelersByIds(item.travelers) : [];
+    const missingTravelers = trip.travelers.filter(t => !item.travelers?.includes(t.id));
 
     return `
       <div class="entity-card transit-card">
-        <div class="entity-card-header">
-          <div class="transit-type-badge">
-            <span style="font-size: 1.25rem;">${getTransitIcon(t.type)}</span>
-            <span>${getTransitLabel(t.type).toUpperCase()}</span>
-          </div>
-          ${isJRPassEligible(t.ticketType) ? `
-            <span class="jr-pass-badge">JR Pass ✓</span>
-          ` : ''}
-          ${callbacks ? `
-            <button class="btn-icon edit-btn" data-id="${t.id}" title="Edit Transit">✏️</button>
-          ` : ''}
-        </div>
         <div class="entity-card-body">
-          <h3 style="margin-bottom: 16px;">${t.name}</h3>
-          
-          <div class="transit-route-display">
-            <div class="transit-station">
-              <div class="transit-station-name">${t.departureLocation}</div>
-              <div class="transit-station-time">
-                <strong>${dep.time}</strong> • ${dep.date}
+          <div class="transit-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="transit-icon" style="font-size: 1.5rem;">${getTransitIcon(item.type)}</span>
+              <div>
+                <h3 style="margin: 0; font-size: 1.1rem;">${item.name}</h3>
+                ${item.route ? `<div class="text-muted text-small">${item.route}</div>` : ''}
               </div>
             </div>
-            <div class="transit-arrow">═══▶</div>
-            <div class="transit-station">
-              <div class="transit-station-name">${t.arrivalLocation}</div>
-              <div class="transit-station-time">
-                <strong>${arr.time}</strong> • ${arr.date}
-              </div>
-            </div>
-          </div>
-
-          <div class="transit-meta" style="margin-top: 16px;">
-            <div class="transit-meta-item">
-              <span>⏱️</span>
-              <span>Duration: <strong>${duration}</strong></span>
-            </div>
-            ${t.ticketType ? `
-              <div class="transit-meta-item">
-                <span>🎫</span>
-                <span>${t.ticketType}</span>
-              </div>
-            ` : ''}
-            ${t.reservationRequired ? `
-              <div class="transit-meta-item">
-                <span style="color: var(--warning);">📋</span>
-                <span>Reservation Required</span>
-              </div>
-            ` : `
-              <div class="transit-meta-item">
-                <span style="color: var(--success);">✓</span>
-                <span>No Reservation Needed</span>
-              </div>
-            `}
-            ${t.cost && t.cost.amount > 0 ? `
-              <div class="transit-meta-item">
-                <span>💰</span>
-                <span>${t.cost.currency === 'JPY' ? '¥' : '$'}${t.cost.amount.toLocaleString()}/person</span>
-              </div>
+            ${callbacks ? `
+              <button class="btn-icon edit-btn" data-id="${item.id}" title="Edit Transit">✏️</button>
             ` : ''}
           </div>
 
-          ${t.confirmationCode ? `
-            <div style="margin-top: 16px; padding: 8px 12px; background: rgba(39, 174, 96, 0.1); border-radius: 6px; font-size: 0.875rem;">
-              <span class="text-muted">Confirmation:</span> <strong>${t.confirmationCode}</strong>
+          <div class="transit-route-display" style="margin-top: 16px; display: flex; align-items: center; gap: 16px;">
+            <div class="transit-endpoint">
+              <div class="airport-code">${item.departureLocation}</div>
+              <div class="transit-time">${dep.time}</div>
+              <div class="transit-date">${dep.date}</div>
+            </div>
+            <div class="transit-path" style="flex: 1; text-align: center; position: relative;">
+               <div style="border-top: 2px dashed var(--text-muted); position: absolute; top: 50%; width: 100%; z-index: 1;"></div>
+               <span style="position: relative; z-index: 2; background: white; padding: 0 8px; font-size: 0.75rem; color: var(--text-muted);">${duration}</span>
+            </div>
+            <div class="transit-endpoint arrival">
+              <div class="airport-code">${item.arrivalLocation}</div>
+              <div class="transit-time">${arr.time}</div>
+              <div class="transit-date">${arr.date}</div>
+            </div>
+          </div>
+
+          ${item.cost && item.cost.amount > 0 ? `
+            <div style="margin-top: 12px; font-weight: 500;">
+              💰 ${item.cost.currency === 'JPY' ? '¥' : '$'}${item.cost.amount.toLocaleString()}
             </div>
           ` : ''}
+
         </div>
         <div class="entity-card-footer">
           <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px;">
             👥 Travelers:
           </div>
           <div class="traveler-list">
-            ${travelers.map(tr => `
+            ${travelers.map(t => `
               <div class="traveler-chip">
-                <div class="avatar avatar-sm" style="background-color: ${tr.color}">${tr.initials}</div>
-                <span>${tr.name.split(' ')[0]}</span>
+                <div class="avatar avatar-sm" style="background-color: ${t.color}">${t.initials}</div>
+                <span>${t.name.split(' ')[0]}</span>
               </div>
             `).join('')}
           </div>
-          ${t.notes ? `
+          ${missingTravelers.length > 0 ? `
+             <div style="margin-top: 12px; padding: 8px 12px; background: rgba(241, 196, 15, 0.15); border-radius: 6px; font-size: 0.75rem;">
+               ℹ️ Not on this: ${missingTravelers.map(t => t.name.split(' ')[0]).join(', ')}
+             </div>
+          ` : ''}
+          ${item.notes ? `
             <div style="margin-top: 12px; padding: 8px 12px; background: var(--cream); border-radius: 6px; font-size: 0.75rem;">
-              💡 ${t.notes}
+              📝 ${item.notes}
             </div>
           ` : ''}
         </div>
       </div>
     `;
-  }).join('');
+  }).join('') : `<div class="empty-state">
+    <div style="font-size: 3rem; margin-bottom: 1rem;">🚆</div>
+    <p>No transit legs added yet.</p>
+  </div>`;
 
   container.innerHTML = `
     <div class="tab-header">
@@ -181,6 +146,8 @@ export function renderTransit(container, store, callbacks) {
 
 export function renderTransitForm(transit = null) {
   const isEdit = !!transit;
+  const allTravelerIds = window.store?.getActiveTrip()?.travelers.map(t => t.id) || [];
+
   const data = transit || {
     type: 'train',
     name: '',
@@ -189,49 +156,98 @@ export function renderTransitForm(transit = null) {
     arrivalLocation: '',
     departureTime: '',
     arrivalTime: '',
-    reservationRequired: false,
-    confirmationCode: '',
-    ticketType: '',
     cost: { amount: 0, currency: 'JPY' },
     notes: '',
-    travelers: []
+    travelers: allTravelerIds,
+    paidBy: transit?.paidBy || ''
   };
 
+  /* Robust Date Formatter using Trip Timezone */
   const formatDateForInput = (dateStr) => {
     if (!dateStr) return '';
-    const d = new Date(dateStr);
-    return d.toISOString().slice(0, 16);
+    const trip = window.store?.getActiveTrip();
+    const timezone = trip?.timezone || 'UTC'; // Fallback to UTC if no trip TZ
+
+    try {
+      // Parse string to Date (UTC)
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return '';
+
+      // Format to keys using the Target Timezone
+      const fmt = new Intl.DateTimeFormat('en-CA', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: timezone
+      });
+
+      // parts: year, month, day, hour, minute, literal...
+      const parts = fmt.formatToParts(date);
+      const getPart = (type) => parts.find(p => p.type === type)?.value;
+
+      // Construct YYYY-MM-DDTHH:MM
+      return `${getPart('year')}-${getPart('month')}-${getPart('day')}T${getPart('hour')}:${getPart('minute')}`;
+    } catch (e) {
+      console.error('Date format error', e);
+      return dateStr ? new Date(dateStr).toISOString().slice(0, 16) : '';
+    }
+  };
+
+  const renderImportZone = () => {
+    if (isEdit) return '';
+    return `
+      <div class="import-zone" id="import-zone">
+        <div class="import-icon">📄</div>
+        <div class="import-text">
+            <strong>Drag screenshot here</strong> or <span class="cmd-shortcut">Ctrl+V / Cmd+V</span> to paste
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+            AI will auto-fill details
+        </div>
+        <input type="file" id="import-file-input" accept="image/*" style="display: none;">
+        <button type="button" onclick="document.getElementById('import-file-input').click()" class="btn-text" style="font-size: 0.875rem; margin-top: 8px;">
+            Or click to upload
+        </button>
+      </div>
+      <div class="form-divider"><span>OR ENTER MANUALLY</span></div>
+    `;
   };
 
   return `
     <div class="form-container">
-      <h2>${isEdit ? '✏️ Edit Transit' : '🚆 Add Transit'}</h2>
+      <h2>${isEdit ? '📝 Edit Transit' : '🚆 Add Transit'}</h2>
+      
+      ${renderImportZone()}
+
       <form id="transit-form">
         <div class="form-group">
           <label>Type</label>
           <select name="type" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
-            <option value="train" ${data.type === 'train' ? 'selected' : ''}>Train</option>
+            <option value="train" ${data.type === 'train' ? 'selected' : ''}>Train / Shinkansen</option>
             <option value="bus" ${data.type === 'bus' ? 'selected' : ''}>Bus</option>
-            <option value="subway" ${data.type === 'subway' ? 'selected' : ''}>Subway</option>
-            <option value="taxi" ${data.type === 'taxi' ? 'selected' : ''}>Taxi</option>
+            <option value="subway" ${data.type === 'subway' ? 'selected' : ''}>Subway / Metro</option>
             <option value="ferry" ${data.type === 'ferry' ? 'selected' : ''}>Ferry</option>
+            <option value="taxi" ${data.type === 'taxi' ? 'selected' : ''}>Taxi / Uber</option>
             <option value="rental_car" ${data.type === 'rental_car' ? 'selected' : ''}>Rental Car</option>
           </select>
         </div>
 
         <div class="form-group">
-            <label for="name">Name / Route Name</label>
-            <input type="text" name="name" value="${data.name}" placeholder="e.g. Narita Express" required>
+            <label for="name">Name / Route</label>
+            <input type="text" name="name" value="${data.name}" placeholder="e.g. Narita Express NE 123" required>
         </div>
 
         <div class="form-row">
             <div class="form-group">
-                <label for="departureLocation">Dep Location</label>
-                <input type="text" name="departureLocation" value="${data.departureLocation}" placeholder="e.g. Narita Airport" required>
+                <label for="departureLocation">From</label>
+                <input type="text" name="departureLocation" value="${data.departureLocation}" placeholder="e.g. Tokyo Station" required>
             </div>
             <div class="form-group">
-                <label for="arrivalLocation">Arr Location</label>
-                <input type="text" name="arrivalLocation" value="${data.arrivalLocation}" placeholder="e.g. Shinjuku Station" required>
+                <label for="arrivalLocation">To</label>
+                <input type="text" name="arrivalLocation" value="${data.arrivalLocation}" placeholder="e.g. Kyoto Station" required>
             </div>
         </div>
 
@@ -247,31 +263,25 @@ export function renderTransitForm(transit = null) {
         </div>
 
         <div class="form-row">
-             <div class="form-group">
-                <label>Ticket Type</label>
-                <input type="text" name="ticketType" value="${data.ticketType}" placeholder="e.g. JR Pass, Suica, Ticket">
-            </div>
-            <div class="form-group" style="display: flex; align-items: flex-end;">
-                 <label class="checkbox-label">
-                    <input type="checkbox" name="reservationRequired" value="true" ${data.reservationRequired ? 'checked' : ''}>
-                    Reservation Required
-                </label>
+            <div class="form-group">
+                <label>Cost (Total USD)</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="number" name="cost.amount" value="${data.cost?.amount || data.metadata?.cost?.amount || ''}" placeholder="Cost total" step="0.01" min="0" class="currency-input" style="flex: 1;">
+                    <input type="hidden" name="cost.currency" value="USD">
+                </div>
             </div>
         </div>
 
-        <div class="form-group">
-            <label for="confirmationCode">Confirmation Code</label>
-            <input type="text" name="confirmationCode" value="${data.confirmationCode}" placeholder="e.g. RES-123">
-        </div>
-
-        <div class="form-group">
-            <label>Cost</label>
-            <div style="display: flex; gap: 8px;">
-                <select name="cost.currency" style="width: 80px; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
-                    <option value="JPY" ${data.cost?.currency === 'JPY' ? 'selected' : ''}>JPY</option>
-                    <option value="USD" ${data.cost?.currency === 'USD' ? 'selected' : ''}>USD</option>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="paidBy">Paid by</label>
+                <select name="paidBy" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <option value="">-- Select Payer --</option>
+                    ${window.store?.getActiveTrip()?.travelers.map(t => {
+    const payerId = data.paidBy || data.cost?.paidBy || data.metadata?.cost?.paidBy;
+    return `<option value="${t.id}" ${payerId === t.id ? 'selected' : ''}>${t.name}</option>`;
+  }).join('')}
                 </select>
-                <input type="number" name="cost.amount" value="${data.cost?.amount || 0}" placeholder="Cost per person">
             </div>
         </div>
 

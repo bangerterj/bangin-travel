@@ -1,0 +1,46 @@
+
+=== User Table Columns ===
+[
+  {
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "column_name": "email_verified",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "column_name": "name",
+    "data_type": "text"
+  },
+  {
+    "column_name": "email",
+    "data_type": "text"
+  },
+  {
+    "column_name": "image",
+    "data_type": "text"
+  }
+]
+
+=== Verification Token Columns ===
+[
+  {
+    "column_name": "expires",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "column_name": "identifier",
+    "data_type": "text"
+  },
+  {
+    "column_name": "token",
+    "data_type": "text"
+  }
+]
+
+=== Recent Verification Tokens ===
+[]
+
+=== All Tables ===
+trips, items, item_travelers, invitations, travelers, user, account, session, verification_token

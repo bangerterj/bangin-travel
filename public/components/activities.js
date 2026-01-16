@@ -1,5 +1,5 @@
-/**
- * Activities Component - Activity cards grouped by date with priority filtering
+﻿/**
+ * Activities Component - Handles rendering and form for trip activities
  */
 
 export function renderActivities(container, store, callbacks) {
@@ -10,66 +10,34 @@ export function renderActivities(container, store, callbacks) {
   let filter = 'all';
 
   function render() {
-    const filteredActivities = filter === 'all'
-      ? activities
-      : activities.filter(a => a.priority === filter);
+    // No filtering, show all sorted by date
+    const sortedActivities = [...activities].sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
 
     // Group by date
     const grouped = {};
-    filteredActivities.forEach(a => {
-      const dateKey = new Date(a.startTime).toDateString();
-      if (!grouped[dateKey]) {
-        grouped[dateKey] = [];
-      }
-      grouped[dateKey].push(a);
-    });
-
-    // Sort dates
-    const sortedDates = Object.keys(grouped).sort((a, b) => new Date(a) - new Date(b));
+    if (sortedActivities.length > 0) {
+      sortedActivities.forEach(a => {
+        const dateKey = new Date(a.startTime.split('T')[0] + 'T00:00:00').toDateString();
+        if (!grouped[dateKey]) grouped[dateKey] = [];
+        grouped[dateKey].push(a);
+      });
+    }
+    const sortedDates = Object.keys(grouped); // Already sorted by insertion implicitly if we sorted input? No, verify.
+    // robust sort
+    sortedDates.sort((a, b) => new Date(a) - new Date(b));
 
     const formatGroupDate = (dateStr) => {
       const date = new Date(dateStr);
-      return date.toLocaleDateString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric'
-      });
+      return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     };
 
     const formatTime = (dateStr) => {
-      return new Date(dateStr).toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      });
-    };
-
-    const getActivityIcon = (type) => {
-      const icons = {
-        tour: '🎨',
-        dining: '🍣',
-        sightseeing: '🏯',
-        entertainment: '🎭',
-        shopping: '🛍️',
-        relaxation: '♨️'
-      };
-      return icons[type] || '🎌';
-    };
-
-    const getPriorityBadge = (priority) => {
-      switch (priority) {
-        case 'must-do':
-          return '<span class="badge badge-must-do">⭐ Must-Do</span>';
-        case 'nice-to-have':
-          return '<span class="badge badge-nice-to-have">✓ Nice to Have</span>';
-        case 'optional':
-          return '<span class="badge badge-optional">💭 Optional</span>';
-        default:
-          return '';
-      }
+      if (!dateStr) return '';
+      return new Date(dateStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     };
 
     const calculateDuration = (start, end) => {
+      if (!start || !end) return '';
       const diff = new Date(end) - new Date(start);
       const hours = Math.floor(diff / (1000 * 60 * 60));
       const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
@@ -80,8 +48,6 @@ export function renderActivities(container, store, callbacks) {
 
     const activityGroups = sortedDates.map(dateKey => {
       const dayActivities = grouped[dateKey];
-
-      // Get location for the day (from first activity or stays)
       const locations = [...new Set(dayActivities.map(a => {
         const parts = a.location.split(',');
         return parts[parts.length - 1].trim();
@@ -94,30 +60,29 @@ export function renderActivities(container, store, callbacks) {
             <div class="activity-day-location">📍 ${locations.join(', ')}</div>
           </div>
           ${dayActivities.map(activity => {
-        const travelers = store.getTravelersByIds(activity.travelers);
+        const travelers = activity.travelers ? store.getTravelersByIds(activity.travelers) : [];
         const duration = calculateDuration(activity.startTime, activity.endTime);
+        const isBooked = activity.status === 'booked';
 
         return `
-              <div class="entity-card activity-card">
+              <div class="entity-card activity-card" style="${isBooked ? 'border-left: 4px solid var(--success);' : ''}">
                 <div class="entity-card-body">
                   <div class="activity-card-header">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
                         <div class="activity-title-row">
-                        <span class="activity-icon">${getActivityIcon(activity.type)}</span>
-                        <h3>${activity.name}</h3>
+                             <span class="activity-icon">📍</span>
+                             <h3>${activity.name}</h3>
                         </div>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            ${getPriorityBadge(activity.priority)}
-                            ${callbacks ? `
-                                <button class="btn-icon edit-btn" data-id="${activity.id}" title="Edit Activity">✏️</button>
-                            ` : ''}
+                            ${isBooked ? '<span class="badge badge-nice-to-have">✅ Booked</span>' : '<span class="badge badge-optional">💭 Planned</span>'}
+                            ${callbacks ? `<button class="btn-icon edit-btn" data-id="${activity.id}" title="Edit Activity">✏️</button>` : ''}
                         </div>
                     </div>
                   </div>
 
                   <div class="activity-time-location">
                     <div>
-                      <span>🕐</span>
+                      <span>🕒</span>
                       <span>${formatTime(activity.startTime)} – ${formatTime(activity.endTime)}</span>
                       <span class="text-muted">(${duration})</span>
                     </div>
@@ -125,21 +90,10 @@ export function renderActivities(container, store, callbacks) {
                       <span>📍</span>
                       <span>${activity.location}</span>
                     </div>
-                    ${activity.reservationRequired ? `
-                      <div>
-                        <span style="color: var(--warning);">📋</span>
-                        <span>Reserved${activity.confirmationCode ? `: ${activity.confirmationCode}` : ''}</span>
-                      </div>
-                    ` : `
-                      <div>
-                        <span style="color: var(--success);">✓</span>
-                        <span>No Reservation Needed</span>
-                      </div>
-                    `}
                     ${activity.cost && activity.cost.amount > 0 ? `
                       <div>
                         <span>💰</span>
-                        <span>${activity.cost.currency === 'JPY' ? '¥' : '$'}${activity.cost.amount.toLocaleString()}/person</span>
+                        <span>$${activity.cost.amount.toLocaleString()}/person</span>
                       </div>
                     ` : ''}
                   </div>
@@ -151,18 +105,13 @@ export function renderActivities(container, store, callbacks) {
                     </div>
                   ` : ''}
 
-                  ${activity.links && activity.links.length > 0 ? `
+                  ${activity.links && activity.links.filter(Boolean).length > 0 ? `
                     <div style="margin-bottom: 12px;">
-                      ${activity.links.map(link => `
-                        <a href="${link}" target="_blank" style="font-size: 0.75rem; color: var(--primary-blue);">🔗 More Info</a>
-                      `).join(' ')}
+                      ${activity.links.map(link => `<a href="${link}" target="_blank" style="font-size: 0.75rem; color: var(--primary-blue);">🔗 More Info</a>`).join(' ')}
                     </div>
                   ` : ''}
 
                   <div style="margin-top: 12px;">
-                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px;">
-                      👥 Going:
-                    </div>
                     <div class="traveler-list">
                       ${travelers.map(t => `
                         <div class="traveler-chip">
@@ -183,31 +132,21 @@ export function renderActivities(container, store, callbacks) {
     container.innerHTML = `
       <div class="tab-header">
         <div class="tab-title">
-          <span style="font-size: 1.5rem;">🎌</span>
+          <span style="font-size: 1.5rem;">📍</span>
           <h2>Activities</h2>
         </div>
-        ${callbacks ? `
-            <button class="btn-primary" id="add-activity-btn">➕ Add Activity</button>
-        ` : ''}
+        ${callbacks ? `<button class="btn-primary" id="add-activity-btn">➕ Add Activity</button>` : ''}
       </div>
 
-      <div class="activities-filters">
-        <button class="filter-btn ${filter === 'all' ? 'active' : ''}" data-filter="all">All (${activities.length})</button>
-        <button class="filter-btn ${filter === 'must-do' ? 'active' : ''}" data-filter="must-do">⭐ Must-Do (${activities.filter(a => a.priority === 'must-do').length})</button>
-        <button class="filter-btn ${filter === 'nice-to-have' ? 'active' : ''}" data-filter="nice-to-have">✓ Nice to Have (${activities.filter(a => a.priority === 'nice-to-have').length})</button>
-        <button class="filter-btn ${filter === 'optional' ? 'active' : ''}" data-filter="optional">💭 Optional (${activities.filter(a => a.priority === 'optional').length})</button>
-      </div>
+      <!-- No Filters -->
 
-      ${activityGroups.length > 0 ? activityGroups : '<p class="text-muted">No activities match the current filter.</p>'}
+      ${activityGroups.length > 0 ? activityGroups : `
+        <div class="empty-state">
+          <div style="font-size: 3rem; margin-bottom: 1rem;">📍</div>
+          <p>No activities added yet.</p>
+        </div>
+      `}
     `;
-
-    // Bind filter buttons
-    container.querySelectorAll('.filter-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        filter = btn.dataset.filter;
-        render();
-      });
-    });
 
     if (callbacks) {
       container.querySelectorAll('.edit-btn').forEach(btn => {
@@ -216,7 +155,6 @@ export function renderActivities(container, store, callbacks) {
           callbacks.onEdit('activities', item);
         });
       });
-
       const addBtn = container.querySelector('#add-activity-btn');
       if (addBtn) {
         addBtn.addEventListener('click', () => {
@@ -226,57 +164,73 @@ export function renderActivities(container, store, callbacks) {
     }
   }
 
-  render();
+  render(); // Initial render
 }
 
 export function renderActivityForm(activity = null) {
   const isEdit = !!activity;
+  const allTravelerIds = window.store?.getActiveTrip()?.travelers.map(t => t.id) || [];
+
   const data = activity || {
-    type: 'sightseeing',
     name: '',
     location: '',
     startTime: '',
     endTime: '',
-    priority: 'nice-to-have',
-    reservationRequired: false,
-    confirmationCode: '',
-    cost: { amount: 0, currency: 'JPY' },
+    status: 'planned',
+    cost: { amount: 0, currency: 'USD' },
     notes: '',
     links: [],
-    travelers: []
+    travelers: allTravelerIds,
+    paidBy: activity?.paidBy || activity?.cost?.paidBy || activity?.metadata?.cost?.paidBy || ''
   };
 
+  /* Robust Date Formatter using Trip Timezone */
   const formatDateForInput = (dateStr) => {
     if (!dateStr) return '';
-    const d = new Date(dateStr);
-    return d.toISOString().slice(0, 16);
+    const trip = window.store?.getActiveTrip();
+    const timezone = trip?.timezone || 'UTC';
+
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return '';
+      const fmt = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: timezone });
+      const parts = fmt.formatToParts(date);
+      const getPart = (type) => parts.find(p => p.type === type)?.value;
+      return `${getPart('year')}-${getPart('month')}-${getPart('day')}T${getPart('hour')}:${getPart('minute')}`;
+    } catch (e) {
+      console.error('Date format error', e);
+      return dateStr ? new Date(dateStr).toISOString().slice(0, 16) : '';
+    }
+  };
+
+  const renderImportZone = () => {
+    if (isEdit) return '';
+    return `
+      <div class="import-zone" id="import-zone">
+        <div class="import-icon">📄</div>
+        <div class="import-text">
+            <strong>Drag screenshot here</strong> or <span class="cmd-shortcut">Ctrl+V / Cmd+V</span> to paste
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+            AI will auto-fill details
+        </div>
+        <input type="file" id="import-file-input" accept="image/*" style="display: none;">
+        <button type="button" onclick="document.getElementById('import-file-input').click()" class="btn-text" style="font-size: 0.875rem; margin-top: 8px;">
+            Or click to upload
+        </button>
+      </div>
+      <div class="form-divider"><span>OR ENTER MANUALLY</span></div>
+    `;
   };
 
   return `
     <div class="form-container">
-      <h2>${isEdit ? '✏️ Edit Activity' : '🎌 Add Activity'}</h2>
+      <h2>${isEdit ? '📝 Edit Activity' : '📍 Add Activity'}</h2>
+      
+      ${renderImportZone()}
+
       <form id="activities-form">
-        <div class="form-group">
-          <label>Type</label>
-          <select name="type" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
-            <option value="sightseeing" ${data.type === 'sightseeing' ? 'selected' : ''}>Sightseeing</option>
-            <option value="dining" ${data.type === 'dining' ? 'selected' : ''}>Dining</option>
-            <option value="shopping" ${data.type === 'shopping' ? 'selected' : ''}>Shopping</option>
-            <option value="entertainment" ${data.type === 'entertainment' ? 'selected' : ''}>Entertainment</option>
-            <option value="relaxation" ${data.type === 'relaxation' ? 'selected' : ''}>Relaxation / Onsen</option>
-            <option value="tour" ${data.type === 'tour' ? 'selected' : ''}>Tour</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>Priority</label>
-          <div style="display: flex; gap: 16px;">
-            <label><input type="radio" name="priority" value="must-do" ${data.priority === 'must-do' ? 'checked' : ''}> Must-Do</label>
-            <label><input type="radio" name="priority" value="nice-to-have" ${data.priority === 'nice-to-have' ? 'checked' : ''}> Nice to Have</label>
-            <label><input type="radio" name="priority" value="optional" ${data.priority === 'optional' ? 'checked' : ''}> Optional</label>
-          </div>
-        </div>
-
+        
         <div class="form-group">
             <label for="name">Name</label>
             <input type="text" name="name" value="${data.name}" placeholder="e.g. TeamLabs Planets" required>
@@ -298,33 +252,39 @@ export function renderActivityForm(activity = null) {
             </div>
         </div>
 
+        <div class="form-group" style="display: flex; align-items: flex-end;">
+             <label class="checkbox-label">
+                <input type="checkbox" name="status" value="booked" ${data.status === 'booked' ? 'checked' : ''}>
+                ✅ Already Booked?
+            </label>
+        </div>
+
         <div class="form-row">
-            <div class="form-group" style="display: flex; align-items: flex-end;">
-                 <label class="checkbox-label">
-                    <input type="checkbox" name="reservationRequired" value="true" ${data.reservationRequired ? 'checked' : ''}>
-                    Reservation Required
-                </label>
-            </div>
             <div class="form-group">
-                <label for="confirmationCode">Confirmation Code</label>
-                <input type="text" name="confirmationCode" value="${data.confirmationCode}" placeholder="e.g. BOOK-123">
+                <label>Cost (Total USD)</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="number" name="cost.amount" value="${data.cost?.amount || data.metadata?.cost?.amount || ''}" placeholder="Cost total" step="0.01" min="0" class="currency-input" style="flex: 1;">
+                    <input type="hidden" name="cost.currency" value="USD">
+                </div>
             </div>
         </div>
 
-        <div class="form-group">
-            <label>Cost</label>
-            <div style="display: flex; gap: 8px;">
-                <select name="cost.currency" style="width: 80px; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
-                    <option value="JPY" ${data.cost?.currency === 'JPY' ? 'selected' : ''}>JPY</option>
-                    <option value="USD" ${data.cost?.currency === 'USD' ? 'selected' : ''}>USD</option>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="paidBy">Paid by</label>
+                <select name="paidBy" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <option value="">-- Select Payer --</option>
+                    ${window.store?.getActiveTrip()?.travelers.map(t => {
+    const payerId = data.paidBy || data.cost?.paidBy || data.metadata?.cost?.paidBy;
+    return `<option value="${t.id}" ${payerId === t.id ? 'selected' : ''}>${t.name}</option>`;
+  }).join('')}
                 </select>
-                <input type="number" name="cost.amount" value="${data.cost?.amount || 0}" placeholder="Cost per person">
             </div>
         </div>
 
         <div class="form-group">
-            <label for="links">Links (comma separated)</label>
-            <input type="text" name="links" value="${data.links ? data.links.join(', ') : ''}" placeholder="https://example.com, https://booking.com">
+            <label for="links">Website Link</label>
+            <input type="text" name="links" value="${data.links ? data.links.join(', ') : ''}" placeholder="https://example.com">
         </div>
 
         <div class="form-group">

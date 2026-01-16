@@ -3,6 +3,8 @@
  * Manages application state and data persistence with multi-trip support
  */
 
+import { TripService } from './services/TripService.js';
+
 const STORAGE_KEY = 'bangin_travel_data';
 
 // Default empty trip template
@@ -12,7 +14,6 @@ const EMPTY_TRIP = {
   destination: '',
   startDate: '',
   endDate: '',
-  password: 'travel', // Default trip password
   timezone: 'UTC',
   coverImage: null,
   travelers: [],
@@ -57,7 +58,6 @@ const SAMPLE_TRIP = {
 
 const DEFAULT_DATA = {
   config: {
-    organizerPassword: 'travel',  // Global/Creation password
     unlockedTripIds: [],          // Trips unlocked in this session
     activeTripId: null,
     activeTab: 'summary'
@@ -115,7 +115,86 @@ export const store = {
       this.data = JSON.parse(JSON.stringify(DEFAULT_DATA));
       this.save();
     }
+    // Initialize session check
+    this.checkSession();
     return this.data;
+  },
+
+  async checkSession() {
+    if (this._checkingSession) return this._checkingSession;
+
+    this._checkingSession = (async () => {
+      try {
+        const session = await TripService.fetchJSON('/api/auth/session');
+        if (session && Object.keys(session).length > 0) {
+          this.session = session;
+          await this.fetchTrips();
+        } else {
+          this.session = null;
+        }
+        return this.session;
+      } catch (e) {
+        console.error('Failed to check session', e);
+        this.session = null;
+      } finally {
+        this._checkingSession = null;
+      }
+    })();
+
+    return this._checkingSession;
+  },
+
+  async fetchTrips(includeArchived = false) {
+    if (!this.session) return;
+    try {
+      const url = includeArchived ? '/api/trips?includeArchived=true' : '/api/trips';
+      const data = await TripService.fetchJSON(url);
+      if (data && data.trips) {
+        // Flatten metadata for UI consumption
+        this.data.trips = data.trips.map(trip => this.flattenTrip(trip));
+        if (!this.data.config.activeTripId && data.trips.length > 0) {
+          this.data.config.activeTripId = data.trips[0].id;
+        }
+        this.save();
+      }
+    } catch (e) {
+      console.error('Failed to fetch trips', e);
+    }
+  },
+
+  // Helper to flatten metadata into top-level properties for UI consumption
+  flattenTrip(trip) {
+    const flatten = (items) => (items || []).map(item => {
+      const flattened = {
+        ...item,
+        ...(item.metadata || {}),
+        name: item.metadata?.name || item.name || item.title // Fallback to title
+      };
+
+      // Ensure item.cost (which is fully constructed in lib/db.js) isn't 
+      // overshadowed by an incomplete item.metadata.cost
+      if (item.cost && item.metadata?.cost) {
+        flattened.cost = { ...item.cost, ...item.metadata.cost };
+      }
+
+      return flattened;
+    });
+
+    return {
+      ...trip,
+      flights: flatten(trip.flights),
+      stays: flatten(trip.stays),
+      transit: flatten(trip.transit),
+      activities: flatten(trip.activities)
+    };
+  },
+
+  getSession() {
+    return this.session;
+  },
+
+  needsName() {
+    return this.session && this.session.user && !this.session.user.name;
   },
 
   save() {
@@ -126,39 +205,6 @@ export const store = {
     this.data = JSON.parse(JSON.stringify(DEFAULT_DATA));
     this.save();
     return this.data;
-  },
-
-  // Password methods
-  verifyPassword(password) {
-    return password === this.data.config.organizerPassword;
-  },
-
-  setUnlocked(unlocked) {
-    // This is mainly for the "Global" unlock to allow creation
-    this.data.config.isGlobalUnlocked = unlocked;
-    this.save();
-  },
-
-  isGlobalUnlocked() {
-    return this.data.config.isGlobalUnlocked;
-  },
-
-  verifyTripPassword(tripId, password) {
-    const trip = this.data.trips.find(t => t.id === tripId);
-    return trip && trip.password === password;
-  },
-
-  unlockTrip(tripId) {
-    if (!this.data.config.unlockedTripIds) this.data.config.unlockedTripIds = [];
-    if (!this.data.config.unlockedTripIds.includes(tripId)) {
-      this.data.config.unlockedTripIds.push(tripId);
-      this.save();
-    }
-  },
-
-  isTripUnlocked(tripId) {
-    if (!this.data.config.unlockedTripIds) return false;
-    return this.data.config.unlockedTripIds.includes(tripId);
   },
 
   // Trip management
@@ -177,7 +223,30 @@ export const store = {
     this.save();
   },
 
-  createTrip(tripData) {
+  async createTrip(tripData) {
+    if (this.session) {
+      try {
+        const newTrip = await TripService.fetchJSON('/api/trips', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: tripData.name,
+            destination: tripData.destination,
+            startDate: tripData.startDate,
+            endDate: tripData.endDate,
+            timezone: tripData.timezone || 'UTC'
+          })
+        });
+        if (newTrip) {
+          await this.fetchTrips();
+          this.data.config.activeTripId = newTrip.id;
+          this.save();
+          return newTrip;
+        }
+      } catch (e) {
+        console.error('API create trip failed', e);
+      }
+    }
+
     const newTrip = {
       ...JSON.parse(JSON.stringify(EMPTY_TRIP)),
       id: this.generateId(),
@@ -185,7 +254,6 @@ export const store = {
       destination: tripData.destination,
       startDate: tripData.startDate,
       endDate: tripData.endDate,
-      password: tripData.password || this.data.config.organizerPassword,
       timezone: tripData.timezone || 'UTC'
     };
     this.data.trips.push(newTrip);
@@ -199,48 +267,307 @@ export const store = {
   },
 
   // Generic CRUD
-  addItem(type, item) {
+  async addItem(type, itemData) {
     const trip = this.getActiveTrip();
     if (!trip) return null;
 
-    if (!trip[type]) trip[type] = [];
+    const collectionKey = type === 'transit' ? 'transit' : type + 's';
 
+    if (this.session) {
+      try {
+        const newItem = await TripService.createItem(trip.id, { type, ...itemData });
+        if (newItem) {
+          // Flatten new item
+          const flatItem = {
+            ...newItem,
+            ...(newItem.metadata || {}),
+            name: newItem.metadata?.name || newItem.name || newItem.title
+          };
+
+          if (!trip[collectionKey]) trip[collectionKey] = [];
+          trip[collectionKey].push(flatItem);
+          this.save();
+          return flatItem;
+        }
+      } catch (e) {
+        console.error(`API addItem failed for ${type}`, e);
+      }
+    }
+
+    // Fallback to local
     const newItem = {
-      ...item,
-      id: type + '-' + Date.now().toString(36)
+      ...itemData,
+      id: type.charAt(0) + '-' + Date.now().toString(36)
     };
-
-    trip[type].push(newItem);
+    if (!trip[collectionKey]) trip[collectionKey] = [];
+    trip[collectionKey].push(newItem);
     this.save();
     return newItem;
   },
 
-  updateItem(type, item) {
+  async updateItem(type, itemData) {
     const trip = this.getActiveTrip();
     if (!trip) return false;
 
-    if (!trip[type]) return false;
+    const collectionKey = type === 'transit' ? 'transit' : type + 's';
 
-    const index = trip[type].findIndex(i => i.id === item.id);
+    if (this.session) {
+      try {
+        const updatedItem = await TripService.updateItem(itemData.id, itemData);
+        if (updatedItem) {
+          // Flatten updated item
+          const flatItem = {
+            ...updatedItem,
+            ...(updatedItem.metadata || {}),
+            name: updatedItem.metadata?.name || updatedItem.name || updatedItem.title
+          };
+
+          const items = trip[collectionKey];
+          const idx = items.findIndex(i => i.id === itemData.id);
+          if (idx !== -1) {
+            items[idx] = flatItem;
+            // items[idx] is a reference to the object in this.data, so this updates the store
+            items[idx] = flatItem;
+            // Force refresh to ensure full consistency with DB (anti-caching headers added to TripService)
+            await this.fetchTrips();
+            this.save();
+            return true;
+          }
+        }
+      } catch (e) {
+        console.error(`API updateItem failed for ${type}`, e);
+      }
+    }
+
+    // Local fallback
+    const items = trip[collectionKey];
+    if (!items) return false;
+    const index = items.findIndex(i => i.id === itemData.id);
     if (index === -1) return false;
 
-    trip[type][index] = { ...item };
+    // IMPORTANT: Flatten metadata for UI compatibility
+    // itemData comes with nested metadata from app.js cleanup, but UI expects top-level keys
+    // We must be careful not to lose top-level paidBy if it's explicitly passed
+    const flatItem = {
+      ...itemData,
+      ...(itemData.metadata || {}),
+      paidBy: itemData.paidBy !== undefined ? itemData.paidBy : (itemData.metadata?.cost?.paidBy || items[index].paidBy)
+    };
+
+    items[index] = flatItem;
     this.save();
     return true;
   },
 
-  deleteItem(type, itemId) {
+  async deleteItem(type, itemId) {
+    console.log('[DELETE] Starting deletion:', { type, itemId });
+    const trip = this.getActiveTrip();
+    if (!trip) {
+      console.error('[DELETE] No active trip found');
+      return false;
+    }
+
+    // Determine collection key: most types are already plural (e.g., 'flights'), but 'transit' is singular
+    let collectionKey;
+    if (type === 'transit') {
+      collectionKey = 'transit';
+    } else if (type.endsWith('s')) {
+      collectionKey = type; // already plural
+    } else {
+      collectionKey = type + 's'; // fallback for singular types
+    }
+    console.log('[DELETE] Collection key:', collectionKey);
+
+    if (this.session) {
+      try {
+        console.log('[DELETE] Making API call to /api/items/' + itemId);
+        await TripService.deleteItem(itemId);
+
+        // Success (no error thrown)
+        // Refresh entire trip to be safe and ensure sync
+        await this.fetchTrips();
+        return true;
+
+      } catch (e) {
+        console.error(`[DELETE] API deleteItem failed for ${type}`, e);
+        return false;
+      }
+    } else {
+      console.log('[DELETE] No session, using local fallback');
+      const items = trip[collectionKey];
+      if (!items) return false;
+      const index = items.findIndex(i => i.id === itemId);
+      if (index === -1) return false;
+      items.splice(index, 1);
+      this.save();
+      return true;
+    }
+  },
+
+  async addTraveler(travelerData) {
+    const trip = this.getActiveTrip();
+    if (!trip) return null;
+
+    if (this.session) {
+      try {
+        const newTraveler = await TripService.createTraveler(trip.id, travelerData);
+        if (newTraveler) {
+          if (!trip.travelers) trip.travelers = [];
+          trip.travelers.push(newTraveler);
+          await this.fetchTrips();
+          this.save();
+          return newTraveler;
+        }
+      } catch (e) {
+        console.error('API addTraveler failed', e);
+        throw e; // Re-throw so handleSave can catch it
+      }
+    }
+
+    // Fallback to local
+    const newTraveler = {
+      ...travelerData,
+      id: 't-' + Date.now().toString(36),
+      initials: travelerData.name ? travelerData.name.split(' ').map(n => n[0]).join('').toUpperCase() : '??'
+    };
+    if (!trip.travelers) trip.travelers = [];
+    trip.travelers.push(newTraveler);
+    this.save();
+    return newTraveler;
+  },
+
+  async updateTraveler(travelerData) {
     const trip = this.getActiveTrip();
     if (!trip) return false;
 
-    if (!trip[type]) return false;
+    if (this.session) {
+      try {
+        const updated = await TripService.updateTraveler(travelerData.id, travelerData);
+        if (updated) {
+          const idx = trip.travelers.findIndex(t => t.id === travelerData.id);
+          if (idx !== -1) {
+            trip.travelers[idx] = updated;
+            await this.fetchTrips();
+            this.save();
+            return true;
+          }
+        }
+      } catch (e) {
+        console.error('API updateTraveler failed', e);
+        throw e; // Re-throw so handleSave can catch it
+      }
+    }
 
-    const index = trip[type].findIndex(i => i.id === itemId);
+    const index = trip.travelers.findIndex(t => t.id === travelerData.id);
     if (index === -1) return false;
-
-    trip[type].splice(index, 1);
+    trip.travelers[index] = { ...trip.travelers[index], ...travelerData };
     this.save();
     return true;
+  },
+
+  async deleteTraveler(travelerId) {
+    const trip = this.getActiveTrip();
+    if (!trip) return false;
+
+    if (this.session) {
+      try {
+        await TripService.deleteTraveler(travelerId);
+        trip.travelers = trip.travelers.filter(t => t.id !== travelerId);
+        await this.fetchTrips();
+        this.save();
+        return true;
+      } catch (e) {
+        console.error('API deleteTraveler failed', e);
+        throw e;
+      }
+    }
+
+    // Local
+    trip.travelers = trip.travelers.filter(t => t.id !== travelerId);
+    this.save();
+    return true;
+  },
+
+  getLedger() {
+    const trip = this.getActiveTrip();
+    if (!trip) return null;
+
+    const travelers = trip.travelers;
+    const allItems = [
+      ...(trip.flights || []),
+      ...(trip.stays || []),
+      ...(trip.transit || []),
+      ...(trip.activities || [])
+    ];
+
+    const balances = {}; // travelerId -> balance (positive means they are owed money)
+    travelers.forEach(t => balances[t.id] = 0);
+
+    let totalTripCost = 0;
+
+    allItems.forEach(item => {
+      // Handle different cost structures
+      let cost = 0;
+      if (typeof item.cost === 'number') cost = item.cost;
+      else if (item.cost && typeof item.cost.amount === 'number') cost = item.cost.amount;
+      else if (item.metadata?.cost) {
+        const metacost = item.metadata.cost;
+        cost = typeof metacost === 'number' ? metacost : parseFloat(metacost.amount || metacost || 0);
+      }
+
+      if (isNaN(cost) || cost <= 0) return;
+
+      totalTripCost += cost;
+
+      const paidBy = item.paidBy;
+      const assignedTravelerIds = item.travelers || [];
+
+      if (!paidBy || assignedTravelerIds.length === 0) return;
+
+      if (balances[paidBy] !== undefined) {
+        balances[paidBy] += cost;
+      }
+
+      const splitAmount = cost / assignedTravelerIds.length;
+      assignedTravelerIds.forEach(tId => {
+        if (balances[tId] !== undefined) {
+          balances[tId] -= splitAmount;
+        }
+      });
+    });
+
+    // Simplify debts using a greedy algorithm
+    const creditors = [];
+    const debtors = [];
+
+    Object.keys(balances).forEach(tId => {
+      const bal = balances[tId];
+      if (bal > 0.01) creditors.push({ id: tId, amount: bal });
+      else if (bal < -0.01) debtors.push({ id: tId, amount: -bal });
+    });
+
+    const debts = [];
+    let i = 0, j = 0;
+    while (i < debtors.length && j < creditors.length) {
+      const debtor = debtors[i];
+      const creditor = creditors[j];
+      const amount = Math.min(debtor.amount, creditor.amount);
+
+      debts.push({ from: debtor.id, to: creditor.id, amount });
+
+      debtor.amount -= amount;
+      creditor.amount -= amount;
+
+      if (debtor.amount < 0.01) i++;
+      if (creditor.amount < 0.01) j++;
+    }
+
+    return {
+      totalCost: totalTripCost,
+      balances,
+      debts,
+      travelers
+    };
   },
 
   // Tab state

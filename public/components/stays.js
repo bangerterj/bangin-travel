@@ -1,5 +1,5 @@
-/**
- * Stays Component - Accommodation cards with traveler assignments
+﻿/**
+ * Stays Component - Handles rendering and form for accommodation data
  */
 
 export function renderStays(container, store, callbacks) {
@@ -9,31 +9,29 @@ export function renderStays(container, store, callbacks) {
   const { stays, travelers: allTravelers } = trip;
 
   const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    if (!dateStr) return '';
+    // Use T00:00:00 to ensure local date parsing
+    const date = new Date(dateStr.split('T')[0] + 'T00:00:00');
+    return date.toLocaleDateString('en-US', {
       month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  const formatTime = (dateStr) => {
-    return new Date(dateStr).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
+      day: 'numeric',
+      year: 'numeric'
     });
   };
 
   const calculateNights = (checkIn, checkOut) => {
-    const diff = new Date(checkOut) - new Date(checkIn);
-    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    if (!checkIn || !checkOut) return 0;
+    const d1 = new Date(checkIn.split('T')[0] + 'T00:00:00');
+    const d2 = new Date(checkOut.split('T')[0] + 'T00:00:00');
+    const diff = d2 - d1;
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
   };
 
   const getStayIcon = (type) => {
     const icons = {
       hotel: '🏨',
       airbnb: '🏠',
-      hostel: '🛏️',
-      ryokan: '🏯'
+      hostel: '🛌'
     };
     return icons[type] || '🏨';
   };
@@ -42,8 +40,7 @@ export function renderStays(container, store, callbacks) {
     const labels = {
       hotel: 'Hotel',
       airbnb: 'Airbnb',
-      hostel: 'Hostel',
-      ryokan: 'Traditional Ryokan'
+      hostel: 'Hostel'
     };
     return labels[type] || type;
   };
@@ -52,21 +49,13 @@ export function renderStays(container, store, callbacks) {
     const labels = {
       'wifi': '📶 WiFi',
       'breakfast': '🍳 Breakfast',
-      'luggage-storage': '🧳 Luggage Storage',
-      'onsen': '♨️ Onsen',
-      'kaiseki-dinner': '🍱 Kaiseki Dinner',
-      'tatami-rooms': '🎎 Tatami Rooms',
-      'gym': '💪 Gym',
-      'restaurant': '🍽️ Restaurant',
-      'spa': '💆 Spa',
-      'ski-shuttle': '🎿 Ski Shuttle',
       'pool': '🏊 Pool',
-      'bar': '🍸 Bar'
+      'gym': '💪 Gym'
     };
-    return labels[amenity] || amenity;
+    return labels[amenity.toLowerCase()] || amenity;
   };
 
-  const stayCards = stays.map(stay => {
+  const stayCards = stays && stays.length > 0 ? stays.map(stay => {
     const nights = calculateNights(stay.checkIn, stay.checkOut);
     const travelers = store.getTravelersByIds(stay.travelers);
     const notStaying = allTravelers.filter(t => !stay.travelers.includes(t.id));
@@ -90,12 +79,12 @@ export function renderStays(container, store, callbacks) {
               <div class="stay-dates">
                 <div class="stay-date-item">
                   <span class="stay-date-label">Check-in</span>
-                  <span class="stay-date-value">${formatDate(stay.checkIn)} at ${formatTime(stay.checkIn)}</span>
+                  <span class="stay-date-value">${formatDate(stay.checkIn)}</span>
                 </div>
                 <div style="font-size: 1.25rem; color: var(--text-muted);">→</div>
                 <div class="stay-date-item">
                   <span class="stay-date-label">Check-out</span>
-                  <span class="stay-date-value">${formatDate(stay.checkOut)} at ${formatTime(stay.checkOut)}</span>
+                  <span class="stay-date-value">${formatDate(stay.checkOut)}</span>
                 </div>
                 <div style="background: var(--accent-orange); color: white; padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: 0.75rem;">
                   ${nights} ${nights === 1 ? 'night' : 'nights'}
@@ -107,28 +96,15 @@ export function renderStays(container, store, callbacks) {
                 <span>${stay.address}</span>
               </div>
 
-              ${stay.confirmationCode ? `
-                <div style="margin-bottom: 12px; font-size: 0.875rem;">
-                  <span class="text-muted">Confirmation:</span> 
-                  <strong>${stay.confirmationCode}</strong>
-                </div>
-              ` : ''}
 
-              ${stay.amenities && stay.amenities.length > 0 ? `
-                <div class="amenities-list">
-                  ${stay.amenities.map(a => `
-                    <span class="amenity-pill">${formatAmenity(a)}</span>
-                  `).join('')}
-                </div>
-              ` : ''}
 
-              ${stay.cost ? `
+              ${stay.cost && stay.cost.amount > 0 ? `
                 <div class="stay-cost">
                   <span>💰</span>
-                  <span class="stay-cost-total">$${stay.cost.amount}</span>
-                  <span class="text-muted">($${stay.cost.perNight}/night × ${nights} nights)</span>
+                  <span class="stay-cost-total">$${parseFloat(stay.cost.amount || 0).toFixed(2)}</span>
+                  ${stay.cost.perNight ? `<span class="text-muted">($${parseFloat(stay.cost.perNight).toFixed(2)}/night × ${nights} nights)</span>` : ''}
                   ${travelers.length > 1 ? `
-                    <span class="text-muted">• $${Math.round(stay.cost.amount / travelers.length)}/person</span>
+                    <span class="text-muted">• $${Math.round(stay.cost.amount / travelers.length).toLocaleString()}/person</span>
                   ` : ''}
                 </div>
               ` : ''}
@@ -149,7 +125,7 @@ export function renderStays(container, store, callbacks) {
           </div>
           ${notStaying.length > 0 ? `
             <div style="margin-top: 12px; padding: 8px 12px; background: rgba(52, 152, 219, 0.1); border-radius: 6px; font-size: 0.75rem;">
-              📝 ${notStaying.map(t => t.name.split(' ')[0]).join(' & ')} staying elsewhere
+              ℹ️ ${notStaying.map(t => t.name.split(' ')[0]).join(' & ')} staying elsewhere
             </div>
           ` : ''}
           ${stay.notes ? `
@@ -160,7 +136,10 @@ export function renderStays(container, store, callbacks) {
         </div>
       </div>
     `;
-  }).join('');
+  }).join('') : `<div class="empty-state">
+    <div style="font-size: 3rem; margin-bottom: 1rem;">🏨</div>
+    <p>No stays added yet.</p>
+  </div>`;
 
   container.innerHTML = `
     <div class="tab-header">
@@ -194,28 +173,47 @@ export function renderStays(container, store, callbacks) {
 
 export function renderStayForm(stay = null) {
   const isEdit = !!stay;
+  const allTravelerIds = window.store?.getActiveTrip()?.travelers.map(t => t.id) || [];
+
   const data = stay || {
     type: 'hotel',
     name: '',
     address: '',
     checkIn: '',
     checkOut: '',
-    confirmationCode: '',
     amenities: [],
     cost: { amount: 0, currency: 'USD', perNight: 0 },
     notes: '',
-    travelers: []
+    travelers: allTravelerIds,
+    paidBy: stay?.paidBy || ''
   };
 
-  const formatDateForInput = (dateStr) => {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    return d.toISOString().slice(0, 16);
+  const renderImportZone = () => {
+    if (isEdit) return '';
+    return `
+      <div class="import-zone" id="import-zone">
+        <div class="import-icon">📄</div>
+        <div class="import-text">
+            <strong>Drag screenshot here</strong> or <span class="cmd-shortcut">Ctrl+V / Cmd+V</span> to paste
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+            AI will auto-fill details
+        </div>
+        <input type="file" id="import-file-input" accept="image/*" style="display: none;">
+        <button type="button" onclick="document.getElementById('import-file-input').click()" class="btn-text" style="font-size: 0.875rem; margin-top: 8px;">
+            Or click to upload
+        </button>
+      </div>
+      <div class="form-divider"><span>OR ENTER MANUALLY</span></div>
+    `;
   };
 
   return `
     <div class="form-container">
-      <h2>${isEdit ? '✏️ Edit Stay' : '🏨 Add Stay'}</h2>
+      <h2>${isEdit ? '📝 Edit Stay' : '🏨 Add Stay'}</h2>
+      
+      ${renderImportZone()}
+
       <form id="stays-form">
         <div class="form-group">
           <label>Accommodation Type</label>
@@ -223,13 +221,12 @@ export function renderStayForm(stay = null) {
             <option value="hotel" ${data.type === 'hotel' ? 'selected' : ''}>Hotel</option>
             <option value="airbnb" ${data.type === 'airbnb' ? 'selected' : ''}>Airbnb</option>
             <option value="hostel" ${data.type === 'hostel' ? 'selected' : ''}>Hostel</option>
-            <option value="ryokan" ${data.type === 'ryokan' ? 'selected' : ''}>Ryokan</option>
           </select>
         </div>
 
         <div class="form-group">
-            <label for="name">Name</label>
-            <input type="text" name="name" value="${data.name}" placeholder="e.g. Shinjuku Granbell" required>
+            <label for="title">Name</label>
+            <input type="text" name="title" value="${data.title || data.name || ''}" placeholder="e.g. Shinjuku Granbell" required>
         </div>
 
         <div class="form-group">
@@ -240,43 +237,53 @@ export function renderStayForm(stay = null) {
         <div class="form-row">
             <div class="form-group">
                 <label for="checkIn">Check In</label>
-                <input type="datetime-local" name="checkIn" value="${formatDateForInput(data.checkIn)}" required>
+                <input type="date" name="checkIn" value="${data.checkIn ? data.checkIn.split('T')[0] : ''}" required>
             </div>
             <div class="form-group">
                 <label for="checkOut">Check Out</label>
-                <input type="datetime-local" name="checkOut" value="${formatDateForInput(data.checkOut)}" required>
+                <input type="date" name="checkOut" value="${data.checkOut ? data.checkOut.split('T')[0] : ''}" required>
             </div>
         </div>
 
-        <div class="form-group">
-            <label for="confirmationCode">Confirmation Code</label>
-            <input type="text" name="confirmationCode" value="${data.confirmationCode}" placeholder="e.g. RES-12345">
-        </div>
 
-        <div class="form-group">
-            <label for="amenities">Amenities (comma separated)</label>
-            <input type="text" name="amenities" value="${data.amenities ? data.amenities.join(', ') : ''}" placeholder="wifi, pool, breakfast">
-        </div>
 
         <div class="form-row">
             <div class="form-group">
-                <label>Total Cost</label>
+                <label>Total Cost (USD)</label>
                 <div style="display: flex; gap: 8px;">
-                    <select name="cost.currency" style="width: 80px; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
-                        <option value="USD" ${data.cost?.currency === 'USD' ? 'selected' : ''}>USD</option>
-                        <option value="JPY" ${data.cost?.currency === 'JPY' ? 'selected' : ''}>JPY</option>
-                    </select>
-                    <input type="number" name="cost.amount" value="${data.cost?.amount || 0}" placeholder="Total">
+                     <input type="number" name="cost.amount" value="${data.cost?.amount || data.metadata?.cost?.amount || ''}" placeholder="0.00" step="0.01" min="0" class="currency-input" style="flex: 1;">
+                     <input type="hidden" name="cost.currency" value="USD">
                 </div>
             </div>
+            <!-- Per Night removed as per request -->
+        </div>
+
+        <script>
+            // Format currency on blur
+            document.querySelectorAll('.currency-input').forEach(input => {
+                input.addEventListener('blur', (e) => {
+                    if (e.target.value) {
+                        e.target.value = parseFloat(e.target.value).toFixed(2);
+                    }
+                });
+            });
+        </script>
+
+        <div class="form-row">
             <div class="form-group">
-                <label>Cost Per Night</label>
-                <input type="number" name="cost.perNight" value="${data.cost?.perNight || 0}" placeholder="Per Night">
+                <label for="paidBy">Paid by</label>
+                <select name="paidBy" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <option value="">-- Select Payer --</option>
+                    ${window.store?.getActiveTrip()?.travelers.map(t => {
+    const payerId = data.paidBy || data.cost?.paidBy || data.metadata?.cost?.paidBy;
+    return `<option value="${t.id}" ${payerId === t.id ? 'selected' : ''}>${t.name}</option>`;
+  }).join('')}
+                </select>
             </div>
         </div>
 
         <div class="form-group">
-            <label>Travelers</label>
+            <label>Travelers (Staying here)</label>
             <div class="checkbox-group">
                 ${generateTravelerCheckboxes(data.travelers)}
             </div>

@@ -54,6 +54,15 @@ async function updateTraveler(req, res, travelerId) {
         if (color !== undefined) updates.color = color;
         if (notes !== undefined) updates.notes = notes;
         if (isOrganizer !== undefined) updates.isOrganizer = isOrganizer;
+        if (req.body.coupleId !== undefined) updates.coupleId = req.body.coupleId;
+
+        // If name changed but initials didn't, update initials
+        if (updates.displayName && !updates.initials) {
+            updates.initials = updates.displayName.trim().split(' ')
+                .map(n => n.charAt(0).toUpperCase())
+                .slice(0, 2)
+                .join('');
+        }
 
         if (Object.keys(updates).length === 0) {
             return res.status(400).json({ error: 'No fields to update' });

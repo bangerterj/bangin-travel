@@ -10,11 +10,19 @@ import { renderFlights, renderFlightForm } from './components/flights.js';
 import { renderStays, renderStayForm } from './components/stays.js';
 import { renderTransit, renderTransitForm } from './components/transit.js';
 import { renderActivities, renderActivityForm } from './components/activities.js';
-import { renderTripSelector, renderPasswordModal, renderTripSetupForm, renderTripSwitcher } from './components/trips.js';
+import { renderLedger } from './components/ledger.js';
+import { renderTripSelector, renderTripSetupForm, renderTripSwitcher, renderSetPasswordModal, renderInviteModal, renderTripEditForm, renderAccountSettings } from './components/trips.js';
+import { setupAutocomplete } from './components/autocomplete.js';
+import { TripService } from './services/TripService.js';
 
 class App {
     constructor() {
         this.data = store.init();
+        this.modalHasChanges = false;
+        // Check session and re-render when done
+        store.checkSession().then(() => {
+            this.render();
+        });
         this.cacheDOM();
         this.bindEvents();
         this.render();
@@ -33,7 +41,8 @@ class App {
             flights: document.getElementById('tab-flights'),
             stays: document.getElementById('tab-stays'),
             transit: document.getElementById('tab-transit'),
-            activities: document.getElementById('tab-activities')
+            activities: document.getElementById('tab-activities'),
+            ledger: document.getElementById('tab-ledger')
         };
         this.navTabs = document.querySelectorAll('.nav-tab');
         this.modalOverlay = document.getElementById('modal-container');
@@ -45,7 +54,25 @@ class App {
         this.navTabs.forEach(tab => {
             tab.addEventListener('click', (e) => {
                 const target = e.currentTarget.dataset.tab;
-                if (target) this.switchTab(target);
+                if (target) {
+                    if (this.modalHasChanges) {
+                        if (confirm('You have unsaved changes. Save them before switching tabs?')) {
+                            // Try to submit the form
+                            const form = this.modalBody.querySelector('form');
+                            if (form) {
+                                form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                                return; // handleSave will switch tab if successful? No, handleSave doesn't know about the tab switch request.
+                            }
+                        } else {
+                            this.modalHasChanges = false;
+                            this.closeModal();
+                            this.switchTab(target);
+                        }
+                    } else {
+                        this.closeModal();
+                        this.switchTab(target);
+                    }
+                }
             });
         });
         if (this.modalClose) {
@@ -69,6 +96,7 @@ class App {
             e.preventDefault();
             this.modalOverlay.style.border = 'none';
         });
+
         document.addEventListener('drop', (e) => this.handleDrop(e));
 
         // Paste support for Screenshots
@@ -93,6 +121,28 @@ class App {
         });
     }
 
+    showLoading(message = 'Loading...') {
+        const existing = document.querySelector('.loading-overlay');
+        if (existing) existing.remove();
+
+        const overlay = document.createElement('div');
+        overlay.className = 'loading-overlay';
+        overlay.innerHTML = `
+            <div class="spinner"></div>
+            <div class="loading-text">${message}</div>
+        `;
+        document.body.appendChild(overlay);
+    }
+
+    hideLoading() {
+        const overlay = document.querySelector('.loading-overlay');
+        if (overlay) {
+            overlay.style.opacity = '0';
+            setTimeout(() => overlay.remove(), 300);
+        }
+    }
+
+
     async handleDrop(e) {
         e.preventDefault();
         this.modalOverlay.style.border = 'none';
@@ -116,53 +166,79 @@ class App {
         }
     }
 
+    // ... (previous code)
+
     async handleImageFile(file) {
         if (!file.type.startsWith('image/')) {
             this.showToast('Please use an image file (screenshot).');
             return;
         }
 
-        // Allow parsing even without a trip (for testing)
         const trip = store.getActiveTrip();
         if (!trip) {
             console.log('No trip active, but proceeding with parse for demo purposes.');
         }
 
-        this.showToast('✨ Analyzing screenshot with Gemini...');
+        this.showLoading('✨ Analyzing screenshot with Gemini...');
 
         try {
-            // Compress/Resize image before upload to avoid Vercel 4.5MB payload limit
-            this.showToast('✨ Compressing & analyzing...');
             const base64 = await this.processImage(file);
             const result = await this.uploadImage(base64);
 
             if (result.error) throw new Error(result.details || result.error);
 
-            const data = result.data;
-            this.showToast(`Found ${data.type}: ${data.title}`);
+            // Check if result is an array (multi-item parse, e.g. roundtrip)
+            const rawData = result.data;
+            const items = Array.isArray(rawData) ? rawData : [rawData];
 
-            // Map API response to our internal format
-            const mappedData = this.mapScannedData(data);
+            if (items.length > 1) {
+                // Multi-item flow (Roundtrip)
+                let successCount = 0;
+                for (const item of items) {
+                    try {
+                        const mapped = this.mapScannedData(item);
 
-            // Switch to relevant tab and open modal
-            const typeMap = {
-                'flight': 'flights',
-                'stay': 'stays',
-                'transit': 'transit',
-                'activity': 'activities'
-            };
-            const tab = typeMap[data.type] || 'summary';
+                        let storeType = 'flights';
+                        if (item.type === 'stay') storeType = 'stays';
+                        if (item.type === 'activity') storeType = 'activities';
+                        if (item.type === 'transit') storeType = 'transit';
 
-            // Force tab switch if needed (only if we have a trip context to switch tabs in)
-            if (trip && this.tabPanes[tab]) {
-                this.switchTab(tab);
+                        // Save item using store
+                        // store.addItem returns the new item on success
+                        const saved = await store.addItem(storeType, mapped);
+                        if (saved) successCount++;
+                    } catch (err) {
+                        console.error('Failed to auto-save item', item, err);
+                    }
+                }
+                this.hideLoading();
+                this.showToast(`✅ Imported ${successCount} items!`);
+                this.render();
+
+            } else {
+                // Single item flow - Open Modal
+                const data = items[0];
+                this.hideLoading();
+                this.showToast(`Found ${data.type}: ${data.title}`);
+
+                // Smart Switch Logic
+                let targetTab = 'summary';
+                if (data.type === 'flight') targetTab = 'flights';
+                if (data.type === 'stay') targetTab = 'stays';
+                if (data.type === 'transit') targetTab = 'transit';
+                if (data.type === 'activity') targetTab = 'activities';
+
+                if (targetTab !== store.data.config.activeTab) {
+                    this.switchTab(targetTab);
+                }
+
+                const mappedData = this.mapScannedData(data);
+                this.openEntityModal(targetTab, mappedData);
             }
-
-            // Open modal with pre-filled data
-            this.openEntityModal(typeMap[data.type], mappedData);
 
         } catch (error) {
             console.error(error);
+            this.hideLoading();
             this.showToast(`Error: ${error.message || 'Failed to parse image'}`, 5000);
         }
     }
@@ -176,69 +252,27 @@ class App {
         });
     }
 
-    async uploadImage(base64Image) {
-        try {
-            const response = await fetch('/api/parse/image', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: base64Image })
-            });
-
-            const text = await response.text();
-            try {
-                const data = JSON.parse(text);
-                if (!response.ok) throw new Error(data.error || data.details || `Server Error: ${response.status}`);
-                return data;
-            } catch (jsonError) {
-                // If JSON parse fails, it's likely an HTML error page (404, 500, 504, 413)
-                console.error("Non-JSON Response:", text);
-                const statusText = response.statusText || 'Unknown Error';
-                // Extract title from HTML if possible or just use substring
-                const cleanText = text.replace(/<[^>]*>/g, '').substring(0, 100);
-                throw new Error(`Server Error (${response.status} ${statusText}): ${cleanText}`);
-            }
-        } catch (error) {
-            return { error: error.message };
-        }
+    async processImage(file) {
+        // Just convert to base64 for now. 
+        // We could add client-side compression here later if needed.
+        return await this.fileToBase64(file);
     }
 
-    processImage(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = (event) => {
-                const img = new Image();
-                img.src = event.target.result;
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-
-                    // Resize if larger than 1280px (Vercel payload limit is 4.5MB, this ensures we are safely under)
-                    const MAX_DIM = 1280;
-                    if (width > MAX_DIM || height > MAX_DIM) {
-                        if (width > height) {
-                            height *= MAX_DIM / width;
-                            width = MAX_DIM;
-                        } else {
-                            width *= MAX_DIM / height;
-                            height = MAX_DIM;
-                        }
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    // Compress to JPEG 0.7 quality
-                    // This typically results in ~200-500KB images
-                    resolve(canvas.toDataURL('image/jpeg', 0.7));
-                };
-                img.onerror = (e) => reject(e);
-            };
-            reader.onerror = (e) => reject(e);
+    async uploadImage(base64Image) {
+        const response = await fetch('/api/parse/image', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ image: base64Image }),
         });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            return { error: errorData.error || 'Upload failed', details: errorData.details };
+        }
+
+        return await response.json();
     }
 
     mapScannedData(data) {
@@ -249,26 +283,28 @@ class App {
             notes: data.notes || '',
             // Try to map times
             startAt: data.startAt,
-            endAt: data.endAt
+            endAt: data.endAt,
+            // Generic fallback for mismatched types:
+            description: data.summary || ''
         };
 
         // Type specific mapping
         if (data.type === 'flight') {
             const meta = data.metadata || {};
+
             return {
                 ...base,
                 type: 'departure', // default to outbound
                 airline: meta.airline || data.title, // fallback
                 flightNumber: meta.flightNumber || '',
                 departureAirport: meta.departureAirport || '',
-                departureCity: '', // AI often misses city vs airport
                 arrivalAirport: meta.arrivalAirport || '',
-                arrivalCity: '',
                 departureTime: data.startAt,
                 arrivalTime: data.endAt,
-                confirmationCode: meta.confirmationCode || ''
+                duration: meta.duration || '', // Let the API calculate it unless Gemini found it explicitly
             };
         }
+
 
         if (data.type === 'stay') {
             const meta = data.metadata || {};
@@ -278,7 +314,7 @@ class App {
             const textContent = (data.title + ' ' + (data.notes || '')).toLowerCase();
             if (textContent.includes('airbnb')) stayType = 'airbnb';
             else if (textContent.includes('hostel')) stayType = 'hostel';
-            else if (textContent.includes('ryokan')) stayType = 'ryokan';
+            // ryokan removed/merged
 
             return {
                 ...base,
@@ -286,287 +322,501 @@ class App {
                 address: meta.address || '',
                 checkIn: data.startAt,
                 checkOut: data.endAt,
-                confirmationCode: meta.confirmationCode || ''
+                cost: { amount: meta.cost || 0, currency: 'USD' } // Try to map cost
+                // confirmationCode removed
+            };
+        }
+
+        // Add mapping for activities/transit if needed for completeness
+        if (data.type === 'activity') {
+            return {
+                ...base,
+                type: 'sightseeing',
+                location: data.location || '',
+                startTime: data.startAt,
+                endTime: data.endAt
+            };
+        }
+
+        if (data.type === 'transit') {
+            const meta = data.metadata || {};
+            return {
+                ...base,
+                type: 'train', // default
+                departureLocation: meta.departureLocation || '',
+                arrivalLocation: meta.arrivalLocation || '',
+                departureTime: data.startAt,
+                arrivalTime: data.endAt
             };
         }
 
         return base;
     }
 
-    switchTab(tabId) {
-        store.setActiveTab(tabId);
-        this.renderTabs();
+    render() {
+        const session = store.getSession();
+
+        // If not logged in, show login prompt
+        if (!session) {
+            this.showView('trips'); // Use trips container for login prompt
+            this.tripsContainer.innerHTML = `
+                <div class="login-prompt">
+                    <h2>🚐 Welcome to Bangin' Travel</h2>
+                    <p>Sign in to view and manage your trips.</p>
+                    <a href="/api/auth/signin" class="btn btn-primary">
+                        Log In / Sign Up
+                    </a>
+                </div>
+            `;
+            return;
+        }
+
+        // Check if user needs to set their name
+        if (store.needsName()) {
+            this.showView('trips');
+            this.tripsContainer.innerHTML = `
+                <div class="login-prompt">
+                    <h2>👋 Almost there!</h2>
+                    <p>What should we call you? This will be your name on travel profiles.</p>
+                    <form id="name-capture-form" style="display: flex; flex-direction: column; gap: 16px; max-width: 300px; margin: 20px auto;">
+                        <input type="text" id="user-name-input" placeholder="Your Name" required autofocus style="padding: 12px; border-radius: 8px; border: 2px solid var(--border-color);">
+                        <button type="submit" class="btn btn-primary">Save & Continue</button>
+                    </form>
+                </div>
+            `;
+            const form = document.getElementById('name-capture-form');
+            form?.addEventListener('submit', (e) => this.handleUpdateName(e));
+            return;
+        }
+
+        // Logged in - show trips or dashboard
+        if (store.data.config.activeTripId) {
+            this.showView('dashboard');
+            this.renderHeaderProfile();
+
+            this.renderTabs();
+            this.renderTabContent();
+            this.updateTripSwitcher();
+        } else {
+            this.showView('trips');
+            document.getElementById('trip-hero')?.classList.add('hidden'); // Hide hero on list view
+            renderTripSelector(this.tripsContainer, store, {
+                onSelectTrip: (id) => this.handleTripSelect(id),
+                onCreateNew: () => this.handleTripCreate(),
+                onAccountSettings: () => this.handleAccountSettings()
+            });
+
+            // Bind Set Password button if it exists
+            const setPasswordBtn = document.getElementById('set-password-btn');
+            if (setPasswordBtn) {
+                setPasswordBtn.addEventListener('click', () => this.handleSetPassword());
+            }
+        }
     }
 
-    render() {
-        const activeTrip = store.getActiveTrip();
+    renderHeaderProfile() {
+        const container = document.getElementById('header-right');
+        const session = store.getSession();
+        if (!container || !session) return;
 
-        if (!activeTrip) {
-            // Show trip selector
-            this.showView('trips');
-            this.renderTripSelector();
-        } else {
-            // Show dashboard
-            this.showView('dashboard');
-            this.updatePageTitle();
-            this.renderTripSwitcher();
-            this.renderTabs();
+        container.innerHTML = `
+            <button class="account-btn" id="header-account-btn" title="Account Settings">
+                <span>👤</span>
+                <span>${session.user.name || 'Account'}</span>
+            </button>
+        `;
+
+        document.getElementById('header-account-btn')?.addEventListener('click', () => {
+            this.handleAccountSettings();
+        });
+    }
+
+    async handleUpdateName(e) {
+        e.preventDefault();
+        const name = document.getElementById('user-name-input')?.value;
+        if (!name) return;
+
+        const submitBtn = e.target.querySelector('button');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Saving...';
+
+        try {
+            const res = await fetch('/api/auth/update-name', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name }),
+            });
+
+            if (res.ok) {
+                this.showToast('✅ Profile updated!');
+                await store.checkSession();
+                this.render();
+            } else {
+                const data = await res.json();
+                alert(data.message || 'Error updating profile.');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Save & Continue';
+            }
+        } catch (err) {
+            alert('Server error. Please try again.');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save & Continue';
         }
+    }
+
+    handleSetPassword() {
+        this.openModal(renderSetPasswordModal());
+
+        const form = document.getElementById('set-password-form');
+        const errorEl = document.getElementById('set-password-error');
+
+        form?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = document.getElementById('new-password')?.value;
+            const confirm = document.getElementById('confirm-password')?.value;
+
+            if (password !== confirm) {
+                errorEl.textContent = 'Passwords do not match.';
+                errorEl?.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/auth/set-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password }),
+                });
+
+                if (res.ok) {
+                    this.showToast('✅ Password set successfully!');
+                    this.closeModal();
+                    // Update session/store state
+                    await store.checkSession();
+                    this.render();
+                } else {
+                    const data = await res.json();
+                    errorEl.textContent = data.message || 'Error setting password.';
+                    errorEl?.classList.remove('hidden');
+                }
+            } catch (err) {
+                errorEl.textContent = 'Server error. Please try again.';
+                errorEl?.classList.remove('hidden');
+            }
+        });
     }
 
     showView(viewName) {
-        Object.keys(this.views).forEach(v => {
-            if (this.views[v]) {
-                this.views[v].classList.toggle('hidden', v !== viewName);
+        Object.keys(this.views).forEach(key => {
+            if (key === viewName) {
+                this.views[key].classList.remove('hidden');
+            } else {
+                this.views[key].classList.add('hidden');
             }
         });
     }
 
-    updatePageTitle() {
-        const trip = store.getActiveTrip();
-        if (trip) {
-            document.title = `Bangin' Travel | ${trip.name}`;
-        } else {
-            document.title = `Bangin' Travel`;
-        }
-    }
-
-    renderTripSelector() {
-        renderTripSelector(this.tripsContainer, store, {
-            onSelectTrip: (tripId) => {
-                if (store.isTripUnlocked(tripId)) {
-                    store.setActiveTrip(tripId);
-                    this.render();
-                } else {
-                    const trip = store.getTrips().find(t => t.id === tripId);
-                    this.openModal(renderPasswordModal(trip.name));
-                    this.bindPasswordForm(tripId);
-                }
-            },
-            onCreateNew: () => {
-                this.openModal(renderPasswordModal());
-                this.bindPasswordForm(null); // null means global/admin unlock
-            }
-        });
-    }
-
-    renderTripSwitcher() {
-        if (this.tripSwitcherContainer) {
-            this.tripSwitcherContainer.innerHTML = renderTripSwitcher(store);
-            this.bindTripSwitcher();
-        }
-    }
-
-    bindTripSwitcher() {
-        const toggle = document.getElementById('trip-switcher-toggle');
-        const dropdown = document.getElementById('trip-switcher-dropdown');
-
-        if (toggle && dropdown) {
-            toggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                dropdown.classList.toggle('hidden');
-            });
-
-            dropdown.querySelectorAll('.trip-switcher-option[data-trip-id]').forEach(option => {
-                option.addEventListener('click', () => {
-                    const tripId = option.dataset.tripId;
-                    store.setActiveTrip(tripId);
-                    dropdown.classList.add('hidden');
-                    this.render();
-                });
-            });
-
-            const allTripsBtn = document.getElementById('go-to-all-trips');
-            if (allTripsBtn) {
-                allTripsBtn.addEventListener('click', () => {
-                    store.setActiveTrip(null);
-                    dropdown.classList.add('hidden');
-                    this.render();
-                });
-            }
-        }
-    }
-
-    bindPasswordForm(targetTripId) {
-        const form = document.getElementById('password-form');
-        const input = document.getElementById('password-input');
-        const error = document.getElementById('password-error');
-
-        if (form) {
-            form.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const password = input.value;
-
-                if (targetTripId) {
-                    // Verifying trip-specific password
-                    if (store.verifyTripPassword(targetTripId, password)) {
-                        store.unlockTrip(targetTripId);
-                        store.setActiveTrip(targetTripId);
-                        this.closeModal();
-                        this.render();
-                    } else {
-                        error.classList.remove('hidden');
-                        input.value = '';
-                        input.focus();
-                    }
-                } else {
-                    // Global unlock for creation
-                    if (store.verifyPassword(password)) {
-                        store.setUnlocked(true);
-                        // Show trip setup form
-                        this.modalBody.innerHTML = renderTripSetupForm();
-                        this.bindTripSetupForm();
-                    } else {
-                        error.classList.remove('hidden');
-                        input.value = '';
-                        input.focus();
-                    }
-                }
-            });
-        }
-    }
-
-    bindTripSetupForm() {
-        const form = document.getElementById('trip-setup-form');
-        const cancelBtn = document.getElementById('cancel-trip-btn');
-        const error = document.getElementById('trip-form-error');
-
-        if (cancelBtn) {
-            cancelBtn.addEventListener('click', () => {
-                this.closeModal();
-            });
-        }
-
-        if (form) {
-            form.addEventListener('submit', (e) => {
-                e.preventDefault();
-
-                const name = document.getElementById('trip-name').value.trim();
-                const destination = document.getElementById('trip-destination').value.trim();
-                const startDate = document.getElementById('trip-start-date').value;
-                const endDate = document.getElementById('trip-end-date').value;
-                const password = document.getElementById('trip-password').value;
-
-                if (!name || !destination || !startDate || !endDate || !password) {
-                    error.classList.remove('hidden');
-                    return;
-                }
-
-                if (new Date(endDate) < new Date(startDate)) {
-                    error.textContent = 'End date must be after start date.';
-                    error.classList.remove('hidden');
-                    return;
-                }
-
-                // Create the trip
-                const newTrip = store.createTrip({
-                    name,
-                    destination,
-                    startDate,
-                    endDate,
-                    password
-                });
-
-                store.unlockTrip(newTrip.id);
-                this.closeModal();
-                this.showToast(`Created "${newTrip.name}"! 🎉`);
-                this.render();
-            });
-        }
+    switchTab(tabName) {
+        store.setActiveTab(tabName);
+        this.renderTabs();
+        this.renderTabContent();
     }
 
     renderTabs() {
         const activeTab = store.data.config.activeTab || 'summary';
-
-        // Update nav
         this.navTabs.forEach(tab => {
-            tab.classList.toggle('active', tab.dataset.tab === activeTab);
-        });
-
-        // Update pane visibility
-        Object.keys(this.tabPanes).forEach(key => {
-            const pane = this.tabPanes[key];
-            if (pane) {
-                pane.classList.toggle('active', key === activeTab);
+            if (tab.dataset.tab === activeTab) {
+                tab.classList.add('active');
+            } else {
+                tab.classList.remove('active');
             }
         });
-
-        // Render active tab content
-        this.renderTabContent(activeTab);
     }
 
-    renderTabContent(tabId) {
-        const pane = this.tabPanes[tabId];
-        const trip = store.getActiveTrip();
+    renderTabContent() {
+        const activeTab = store.data.config.activeTab || 'summary';
 
-        if (!pane || !trip) return;
+        // Hide all panes
+        Object.values(this.tabPanes).forEach(pane => {
+            if (pane) pane.classList.remove('active');
+        });
 
-        const callbacks = {
-            onAdd: (type) => this.openEntityModal(type, null),
-            onEdit: (type, item) => this.openEntityModal(type, item),
-            onDelete: (type, id) => this.handleDelete(type, id)
-        };
+        // Show active pane
+        const activePane = this.tabPanes[activeTab];
+        if (activePane) {
+            activePane.classList.add('active');
+            activePane.innerHTML = ''; // Clear current
 
-        switch (tabId) {
-            case 'summary':
-                renderSummary(pane, store, callbacks);
-                break;
-            case 'calendar':
-                renderCalendar(pane, store, (content) => this.openModal(content));
-                break;
-            case 'flights':
-                renderFlights(pane, store, callbacks);
-                break;
-            case 'stays':
-                renderStays(pane, store, callbacks);
-                break;
-            case 'transit':
-                renderTransit(pane, store, callbacks);
-                break;
-            case 'activities':
-                renderActivities(pane, store, callbacks);
-                break;
+            // Render content based on tab
+            const callbacks = {
+                onAdd: (type) => this.openEntityModal(type, null),
+                onEdit: (type, item) => this.openEntityModal(type, item),
+                onInvite: () => this.handleInvite(),
+                onEditTrip: () => this.handleTripEdit()
+            };
+
+            switch (activeTab) {
+                case 'summary':
+                    renderSummary(activePane, store, callbacks);
+                    break;
+                case 'calendar':
+                    renderCalendar(activePane, store);
+                    break;
+                case 'flights':
+                    renderFlights(activePane, store, callbacks);
+                    break;
+                case 'stays':
+                    renderStays(activePane, store, callbacks);
+                    break;
+                case 'transit':
+                    renderTransit(activePane, store, callbacks);
+                    break;
+                case 'activities':
+                    renderActivities(activePane, store, callbacks);
+                    break;
+                case 'ledger':
+                    renderLedger(activePane, store);
+                    break;
+            }
         }
     }
+    updateTripSwitcher() {
+        const container = this.tripSwitcherContainer;
+        if (container) {
+            if (typeof store.getTrips !== 'function') {
+                console.error('CRITICAL: store.getTrips is not a function!', store);
+                return;
+            }
+
+            container.innerHTML = renderTripSwitcher(store);
+
+            // Bind events after rendering
+            const toggleBtn = document.getElementById('trip-switcher-toggle');
+            const dropdown = document.getElementById('trip-switcher-dropdown');
+            const tripOptions = document.querySelectorAll('.trip-switcher-option[data-trip-id]');
+            const goToAllTrips = document.getElementById('go-to-all-trips');
+
+            if (toggleBtn && dropdown) {
+                toggleBtn.addEventListener('click', () => {
+                    dropdown.classList.toggle('hidden');
+                });
+            }
+
+            tripOptions.forEach(option => {
+                option.addEventListener('click', () => {
+                    const tripId = option.dataset.tripId;
+                    store.setActiveTrip(tripId);
+                    dropdown?.classList.add('hidden');
+                    this.render();
+                });
+            });
+
+            if (goToAllTrips) {
+                goToAllTrips.addEventListener('click', () => {
+                    store.setActiveTrip(null);
+                    dropdown?.classList.add('hidden');
+                    this.render();
+                });
+            }
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+    handleTripSelect(id) {
+        // Simplified selection - Auth is handled by session/backend
+        const trip = store.getTrips().find(t => t.id === id);
+        if (trip) {
+            store.setActiveTrip(trip.id);
+            this.render();
+        }
+    }
+
+    handleTripCreate() {
+        this.openModal(renderTripSetupForm());
+
+        const form = document.getElementById('trip-setup-form');
+        const cancelBtn = document.getElementById('cancel-trip-btn');
+        const errorEl = document.getElementById('trip-form-error');
+
+        cancelBtn?.addEventListener('click', () => this.closeModal());
+
+        form?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const newTrip = {
+                name: document.getElementById('trip-name').value,
+                destination: document.getElementById('trip-destination').value,
+                startDate: document.getElementById('trip-start-date').value,
+                endDate: document.getElementById('trip-end-date').value
+            };
+
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = '🚀 Creating...';
+
+            try {
+                await store.createTrip(newTrip);
+                this.closeModal();
+                this.render();
+                this.showToast('✅ Trip created successfully!');
+            } catch (err) {
+                errorEl.textContent = 'Failed to create trip. Please try again.';
+                errorEl.classList.remove('hidden');
+                submitBtn.disabled = false;
+                submitBtn.textContent = '🚀 Create Trip';
+            }
+        });
+    }
+
+    // ... (renderTripSelector, renderTripSwitcher, bindTripSwitcher, bindPasswordForm, bindTripSetupForm, renderTabs, renderTabContent remain unchanged)
 
     openEntityModal(type, item) {
-        // Import form renderers dynamically or assume they are available
-        // For simplicity, we'll assume they are exported from component files and available globally or we import them
-        // distinct render functions for forms might be better placed in a forms.js or similar
-        // BUT per plan, they are in components. 
-        // We need to import them at top of file first.
-        // Let's assume we will update imports.
-
+        // Pass store to render functions to ensuring data access
+        // This fixes issues where window.store might be undefined or stale
         let content = '';
+        const currentStore = store || window.store;
+
         switch (type) {
-            case 'flights': content = renderFlightForm(item); break;
-            case 'stays': content = renderStayForm(item); break;
-            case 'transit': content = renderTransitForm(item); break;
-            case 'stays': content = renderStayForm(item); break;
-            case 'transit': content = renderTransitForm(item); break;
-            case 'activities': content = renderActivityForm(item); break;
-            case 'travelers': content = renderTravelerForm(item); break;
+            case 'flights': content = renderFlightForm(item, currentStore); break;
+            case 'stays': content = renderStayForm(item, currentStore); break;
+            case 'transit': content = renderTransitForm(item, currentStore); break;
+            case 'activities': content = renderActivityForm(item, currentStore); break;
+            case 'travelers': content = renderTravelerForm(item, currentStore); break;
         }
 
+        this.currentItem = item;
         this.openModal(content);
         this.bindEntityForm(type, item);
     }
 
     bindEntityForm(type, item) {
+        console.log('[TRACE] bindEntityForm START:', type);
         const form = document.getElementById(`${type}-form`);
+        console.log('[TRACE] Form element:', form);
         const deleteBtn = document.getElementById('delete-btn');
 
-        if (deleteBtn) {
-            deleteBtn.addEventListener('click', () => {
-                if (confirm('Are you sure you want to delete this item?')) {
-                    this.handleDelete(type, item.id);
-                    this.closeModal();
+        // Bind Import Zone File Input
+        const importInput = document.getElementById('import-file-input');
+        if (importInput) {
+            importInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    this.handleImageFile(e.target.files[0]);
                 }
             });
         }
 
+        // Bind Drag/Drop specifically for Import Zone visual feedback
+        const importZone = document.getElementById('import-zone');
+        if (importZone) {
+            importZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                importZone.classList.add('drag-active');
+            });
+            importZone.addEventListener('dragleave', () => {
+                importZone.classList.remove('drag-active');
+            });
+            importZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                importZone.classList.remove('drag-active');
+                if (e.dataTransfer.files.length > 0) {
+                    this.handleImageFile(e.dataTransfer.files[0]);
+                }
+            });
+        }
+        if (deleteBtn) {
+            const newBtn = deleteBtn.cloneNode(true);
+            deleteBtn.parentNode.replaceChild(newBtn, deleteBtn);
+            newBtn.addEventListener('click', async () => {
+                await this.handleDelete(type, item.id);
+            });
+        } else {
+            console.warn('Delete button not found in DOM');
+        }
+
+        const durationInput = form.querySelector('input[name="duration"]');
+        const depInput = form.querySelector('input[name="departureAirport"]');
+        const arrInput = form.querySelector('input[name="arrivalAirport"]');
+        const depTimeInput = form.querySelector('input[name="departureTime"]');
+        const arrTimeInput = form.querySelector('input[name="arrivalTime"]');
+
+        // FLIGHT-SPECIFIC LOGIC: Only run if this is actually a flight form
+        if (depInput && arrInput) {
+            const searchAirports = async (q) => {
+                const res = await fetch(`/api/airports/search?q=${encodeURIComponent(q)}`);
+                if (!res.ok) return [];
+                return await res.json();
+            };
+
+            const renderAirportItem = (item) => `
+                <div style="font-weight: bold;">${item.iata} - ${item.name}</div>
+                <div style="font-size: 0.8em; color: gray;">${item.city}, ${item.country}</div>
+            `;
+
+            const onSelectAirport = (item, input) => {
+                input.value = item.iata;
+                input.dispatchEvent(new Event('input')); // Trigger change for duration calc
+                this.modalHasChanges = true;
+            };
+
+            setupAutocomplete(depInput, searchAirports, renderAirportItem, onSelectAirport);
+            setupAutocomplete(arrInput, searchAirports, renderAirportItem, onSelectAirport);
+
+            // Duration Calculation
+            const calculateDuration = async () => {
+                const depIata = depInput?.value;
+                const arrIata = arrInput?.value;
+                const depTime = depTimeInput?.value;
+                const arrTime = arrTimeInput?.value;
+
+                if (depIata && arrIata && depTime && arrTime && durationInput) {
+                    // Check if looks like IATA (3 chars) before spamming api
+                    if (depIata.length !== 3 || arrIata.length !== 3) return;
+
+                    try {
+                        const res = await fetch('/api/flights/calculate-duration', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ depIata, arrIata, depTime, arrTime })
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.durationText) {
+                                durationInput.value = data.durationText;
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Duration calc failed', e);
+                    }
+                }
+            };
+
+            // Bind calculation to changes
+            [depInput, arrInput, depTimeInput, arrTimeInput].forEach(el => {
+                if (el) el.addEventListener('blur', calculateDuration);
+            });
+
+            // Initial calculation if data is present
+            if (depInput && arrInput && depTimeInput && arrTimeInput) {
+                if (depInput.value && arrInput.value && depTimeInput.value && arrTimeInput.value) {
+                    calculateDuration();
+                }
+            }
+        }
+
+
+        // Duplicate logic removed from here (moved to top of function)
+
         if (form) {
-            form.addEventListener('submit', (e) => {
+            form.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const formData = new FormData(form);
                 const data = Object.fromEntries(formData.entries());
@@ -577,40 +827,229 @@ class App {
                     const travelerCheckboxes = form.querySelectorAll('input[name="travelers"]:checked');
                     data.travelers = Array.from(travelerCheckboxes).map(cb => cb.value);
 
-                    // Amenities/Links/etc if needed
-                    if (data.amenities) data.amenities = data.amenities.split(',').map(s => s.trim()).filter(Boolean);
-                    // Amenities/Links/etc if needed
-                    if (data.amenities) data.amenities = data.amenities.split(',').map(s => s.trim()).filter(Boolean);
-                    if (data.links) data.links = data.links.split(',').map(s => s.trim()).filter(Boolean);
+                    // Map name to title if present (for stays)
+                    if (data.name && !data.title) {
+                        data.title = data.name;
+                    }
+
+                    // Metadata handling
+                    // Start with existing metadata if editing to avoid data loss
+                    const baseMetadata = (this.currentItem && this.currentItem.metadata) ? { ...this.currentItem.metadata } : {};
+
+                    const metadata = baseMetadata;
+                    if (data.address) metadata.address = data.address;
+                    if (data.type) metadata.type = data.type; // e.g. hotel/airbnb
+
+                    // Cost structure
+                    if (data['cost.amount'] !== undefined) {
+                        const amount = data['cost.amount'] === '' ? 0 : parseFloat(data['cost.amount']);
+                        const perNight = data['cost.perNight'] === '' ? 0 : parseFloat(data['cost.perNight']);
+
+                        metadata.cost = {
+                            ...(metadata.cost || {}),
+                            amount: isNaN(amount) ? 0 : amount,
+                            currency: data['cost.currency'] || 'USD',
+                            perNight: isNaN(perNight) ? 0 : perNight
+                        };
+                    }
+                    data.metadata = metadata;
+
+                    // Cleanup flattened keys
+                    delete data['cost.amount'];
+                    delete data['cost.currency'];
+                    delete data['cost.perNight'];
+                    delete data.address;
                 }
 
                 if (type === 'travelers') {
-                    // Handle traveler specific transformations if needed
-                    // e.g. ensuring color has a value
+                    // Handle traveler specific transformations
+                    // Backend expects displayName, UI uses name
+                    data.displayName = data.name;
+                    // Ensure isOrganizer is boolean
+                    data.isOrganizer = data.isOrganizer === 'true' || data.isOrganizer === true;
+                    // ensuring color has a value
                     if (!data.color) data.color = '#3498db';
                 }
 
-                this.handleSave(type, data, item ? item.id : null);
+                let saveType = type;
+
+                // Specific transformations
+                if (type === 'flights') {
+                    saveType = 'flight'; // Singular for API/Store
+
+                    // Construct title if missing
+                    if (!data.title) {
+                        data.title = `${data.airline || ''} ${data.flightNumber || ''}`.trim() || 'Flight';
+                    }
+
+                    // Move specific fields to metadata that aren't top-level in API
+                    const meta = data.metadata || {};
+                    meta.airline = data.airline;
+                    meta.flightNumber = data.flightNumber;
+                    meta.departureAirport = data.departureAirport;
+                    meta.arrivalAirport = data.arrivalAirport;
+                    meta.duration = data.duration;
+                    meta.departureTime = data.departureTime;
+                    meta.arrivalTime = data.arrivalTime;
+
+                    // Map to generic startAt/endAt for sorting/display
+                    data.startAt = data.departureTime;
+                    data.endAt = data.arrivalTime;
+
+                    // data.type is usually 'departure'/'return' from the form
+                    // The API expects 'flight' as the main type.
+                    // We moved form type to metadata.type in the generic block above (line 789)
+                    // But we must ensure the main type sent to API is 'flight'
+                    // store.addItem(type, data) -> sends { type: type, ...data }
+                    // So we pass 'flight' as saveType.
+
+                    // Cleanup moved fields from top level to avoid clutter (optional but clean)
+                    delete data.airline;
+                    delete data.flightNumber;
+                    delete data.departureAirport;
+                    delete data.arrivalAirport;
+                    delete data.duration;
+
+                    data.metadata = meta;
+                } else if (type === 'stays') {
+                    saveType = 'stay';
+                    data.startAt = data.checkIn;
+                    data.endAt = data.checkOut;
+
+                    const meta = data.metadata || {};
+                    meta.checkIn = data.checkIn;
+                    meta.checkOut = data.checkOut;
+                    data.metadata = meta;
+
+                } else if (type === 'activities') {
+                    saveType = 'activity';
+                    data.startAt = data.startTime;
+                    data.endAt = data.endTime;
+
+                    // Handle checkbox status
+                    data.status = data.status === 'booked' ? 'booked' : 'planned';
+
+                    const meta = data.metadata || {};
+                    meta.location = data.location;
+                    meta.startTime = data.startTime;
+                    meta.endTime = data.endTime;
+                    meta.links = data.links ? data.links.split(',').map(s => s.trim()) : [];
+                    // Note: form inputs might come as string or array? 
+                    // activities.js input name='links' value="...". likely string. 
+                    // But app.js line 817 handles checkboxes. links input is text? 
+                    // activities.js line 306: input type="text". So split is needed if it's comma separated.
+                    // However, previous code assumed it might be array? 
+                    // safely handle it.
+                    if (typeof data.links === 'string') {
+                        meta.links = data.links.split(',').map(s => s.trim()).filter(Boolean);
+                    }
+                    data.metadata = meta;
+
+                } else if (type === 'transit') {
+                    saveType = 'transit';
+                    data.startAt = data.departureTime;
+                    data.endAt = data.arrivalTime;
+
+                    const meta = data.metadata || {};
+                    meta.departureLocation = data.departureLocation;
+                    meta.arrivalLocation = data.arrivalLocation;
+                    meta.departureTime = data.departureTime;
+                    meta.arrivalTime = data.arrivalTime;
+                    // name is mapped to title generically, but transit might want 'name' in metadata too?
+                    // transit.js uses item.name. generic map uses data.name -> data.title.
+                    // Metadata name might be redundant but safe.
+                    meta.name = data.name;
+                    data.metadata = meta;
+                }
+
+                // Ensure data.type is removed so it doesn't override the main saveType in store.addItem
+                // store.addItem(saveType, data) -> { type: saveType, ...data }
+                // If data.type exists (e.g. 'hotel' for stays), it overrides 'stay'.
+                if (data.type) {
+                    // Ensure it's in metadata before deleting, if not already
+                    if (!data.metadata) data.metadata = {};
+                    if (!data.metadata.type) data.metadata.type = data.type;
+                    delete data.type;
+                }
+
+                await this.handleSave(saveType, data, item ? item.id : null);
+
+            });
+
+            // Global Currency Formatting for this form
+            form.querySelectorAll('.currency-input').forEach(input => {
+                input.addEventListener('blur', (e) => {
+                    if (e.target.value) {
+                        e.target.value = parseFloat(e.target.value).toFixed(2);
+                    }
+                });
+            });
+
+            // Track changes
+            form.querySelectorAll('input, select, textarea').forEach(input => {
+                input.addEventListener('input', () => {
+                    this.modalHasChanges = true;
+                });
             });
         }
     }
 
-    handleSave(type, data, id) {
-        if (id) {
-            store.updateItem(type, { ...data, id });
-            this.showToast('Item updated successfully');
-        } else {
-            store.addItem(type, data);
-            this.showToast('Item added successfully');
+    // ... (rest of file)
+
+    async handleSave(type, data, id) {
+        try {
+            if (type === 'travelers') {
+                // Travelers have their own API endpoints
+                if (id) {
+                    await store.updateTraveler({ ...data, id });
+                    this.showToast('Traveler updated successfully');
+                } else {
+                    await store.addTraveler(data);
+                    this.showToast('Traveler added successfully');
+                }
+            } else {
+                // Regular items (flights, stays, activities, transit)
+                if (id) {
+                    await store.updateItem(type, { ...data, id });
+                    this.showToast('Item updated successfully');
+                } else {
+                    await store.addItem(type, data);
+                    this.showToast('Item added successfully');
+                }
+            }
+            this.modalHasChanges = false;
+            this.closeModal();
+            this.render();
+        } catch (error) {
+            console.error('Save error:', error);
+            this.showToast('Error saving: ' + (error.message || 'Unknown error'), 5000);
         }
-        this.closeModal();
-        this.render();
     }
 
-    handleDelete(type, id) {
-        store.deleteItem(type, id);
-        this.showToast('Item deleted');
-        this.render();
+    async handleDelete(type, id) {
+        try {
+            console.log('App.handleDelete', type, id);
+            let success = false;
+
+            if (type === 'travelers') {
+                success = await store.deleteTraveler(id);
+                if (success) this.showToast('Traveler deleted successfully');
+            } else {
+                success = await store.deleteItem(type, id);
+                if (success) this.showToast('Item deleted successfully');
+            }
+
+            if (success) {
+                this.modalHasChanges = false;
+                this.closeModal();
+                this.render();
+            } else {
+                this.showToast('Failed to delete ' + (type === 'travelers' ? 'traveler' : 'item'), 5000);
+            }
+        } catch (error) {
+            console.error('Delete error:', error);
+            this.showToast('Error deleting: ' + (error.message || 'Unknown error'), 5000);
+        }
     }
 
     openModal(content) {
@@ -624,11 +1063,226 @@ class App {
         }
     }
 
-    closeModal() {
+    closeModal(force = false) {
+        if (this.modalHasChanges && !force) {
+            if (!confirm('Discard unsaved changes?')) return;
+        }
         if (this.modalOverlay) {
             this.modalOverlay.classList.add('hidden');
             document.body.style.overflow = '';
+            this.modalHasChanges = false;
         }
+    }
+
+    handleInvite() {
+        const trip = store.getActiveTrip();
+        if (!trip) return;
+
+        this.openModal(renderInviteModal(trip));
+
+        const form = document.getElementById('email-invite-form');
+        const successEl = document.getElementById('invite-email-success');
+
+        form?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('invite-email')?.value;
+            const submitBtn = form.querySelector('button');
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Sending...';
+
+            try {
+                const res = await fetch('/api/invites/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tripId: trip.id, email }),
+                });
+
+                if (res.ok) {
+                    successEl?.classList.remove('hidden');
+                    setTimeout(() => {
+                        this.closeModal();
+                    }, 2000);
+                } else {
+                    const data = await res.json();
+                    alert(data.message || 'Error sending invite.');
+                }
+            } catch (err) {
+                alert('Server error. Please try again.');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Send Invitation';
+            }
+        });
+    }
+
+    handleTripEdit() {
+        const trip = store.getActiveTrip();
+        if (!trip) return;
+
+        console.log('[DEBUG] Opening Edit Trip modal for:', trip.id);
+        this.openModal(renderTripEditForm(trip));
+
+        const bindEvents = () => {
+            const form = document.getElementById('trip-edit-form');
+            const deleteBtn = document.getElementById('delete-trip-btn');
+            const archiveBtn = document.getElementById('archive-trip-btn');
+            const cancelBtn = document.getElementById('cancel-edit-btn');
+
+            if (!form) {
+                setTimeout(bindEvents, 50);
+                return;
+            }
+
+            console.log('[DEBUG] Events bound for trip:', trip.id, '(v3)');
+
+            cancelBtn?.addEventListener('click', () => this.closeModal());
+
+            // Delete Trip Handler
+            deleteBtn?.addEventListener('click', async () => {
+                console.log('[DEBUG] Delete Clicked');
+                if (!window.confirm('PERMANENTLY delete this trip?')) return;
+
+                try {
+                    this.showLoading('🗑️ Deleting...');
+                    await TripService.deleteTrip(trip.id);
+                    this.hideLoading();
+                    this.closeModal();
+                    store.setActiveTrip(null);
+                    await store.fetchTrips();
+                    this.render();
+                    this.showToast('🗑️ Trip deleted');
+                } catch (err) {
+                    this.hideLoading();
+                    alert('Error: ' + err.message);
+                }
+            });
+
+            // Archive Trip Handler - No confirm for archive to avoid browser blocks
+            archiveBtn?.addEventListener('click', async () => {
+                const isArchiving = !trip.isArchived;
+                console.log('[DEBUG] Archive Clicked. Target state:', isArchiving);
+
+                try {
+                    this.showLoading(isArchiving ? '📦 Archiving...' : '📥 Reviving...');
+                    const res = await fetch(`/api/trips/${trip.id}/update`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ isArchived: isArchiving }),
+                    });
+
+                    this.hideLoading();
+                    if (res.ok) {
+                        await store.fetchTrips();
+                        this.closeModal();
+                        this.render();
+                        this.showToast(isArchiving ? '📦 Archived' : '📥 Revived');
+                    } else {
+                        const data = await res.json();
+                        alert('Error: ' + (data.error || 'Unknown'));
+                    }
+                } catch (err) {
+                    this.hideLoading();
+                    alert('Request failed');
+                }
+            });
+
+            // Form Submit Handler
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                console.log('[DEBUG] Form Submit');
+
+                const updateData = {
+                    name: document.getElementById('edit-trip-name').value,
+                    destination: document.getElementById('edit-trip-destination').value,
+                    startDate: document.getElementById('edit-trip-start-date').value,
+                    endDate: document.getElementById('edit-trip-end-date').value
+                };
+
+                const submitBtn = form.querySelector('button[type="submit"]');
+                if (submitBtn) submitBtn.disabled = true;
+
+                try {
+                    const res = await fetch(`/api/trips/${trip.id}/update`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updateData),
+                    });
+
+                    if (res.ok) {
+                        await store.fetchTrips();
+                        this.closeModal();
+                        this.render();
+                        this.showToast('✅ Updated');
+                    } else {
+                        const data = await res.json();
+                        alert(data.error || 'Update failed');
+                    }
+                } catch (err) {
+                    alert('Server error');
+                } finally {
+                    if (submitBtn) submitBtn.disabled = false;
+                }
+            });
+        };
+
+        bindEvents();
+    }
+
+    async handleAccountSettings() {
+        await store.fetchTrips(true); // Fetch all trips including archived
+        const archivedTrips = (store.data.trips || []).filter(t => t.isArchived);
+        this.openModal(renderAccountSettings(store.session?.user, archivedTrips));
+
+        const form = document.getElementById('account-settings-form');
+        form?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const newName = document.getElementById('settings-name').value;
+            const submitBtn = form.querySelector('button');
+            submitBtn.disabled = true;
+
+            try {
+                const res = await fetch('/api/auth/update-name', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName }),
+                });
+
+                if (res.ok) {
+                    await store.checkSession();
+                    this.render();
+                    this.showToast('✅ Profile updated!');
+                    this.closeModal();
+                }
+            } catch (err) {
+                alert('Error updating profile.');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+
+        // Revive buttons in settings
+        document.querySelectorAll('.revive-trip-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const tripId = btn.dataset.id;
+                try {
+                    const res = await fetch(`/api/trips/${tripId}/update`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ isArchived: false }),
+                    });
+
+                    if (res.ok) {
+                        await store.fetchTrips();
+                        this.handleAccountSettings(); // Re-render settings modal
+                        this.render(); // Re-render main dashboard
+                        this.showToast('📥 Trip revived!');
+                    }
+                } catch (err) {
+                    alert('Error reviving trip.');
+                }
+            });
+        });
     }
 
     showToast(message, duration = 3000) {

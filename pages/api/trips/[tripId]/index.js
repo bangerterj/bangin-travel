@@ -1,32 +1,43 @@
-/**
- * API Route: /api/trips/[tripId]
- * GET - Get full trip data (token-gated)
- */
-
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../../auth/[...nextauth]";
 const { trips, travelers, items, assignments } = require('../../../../lib/db');
-const { verifyToken, extractToken } = require('../../../../lib/auth');
 
 export default async function handler(req, res) {
+    const { tripId } = req.query;
+
+    if (req.method === 'DELETE') {
+        const session = await getServerSession(req, res, authOptions);
+        if (!session) return res.status(401).json({ error: 'Unauthorized' });
+
+        // Verify organizer permissions (check both user_id and email for robustness)
+        const allTravelers = await travelers.listByTrip(tripId);
+        const userTraveler = allTravelers.find(t => t.userId === session.user.id || t.email === session.user.email);
+
+        console.log(`[DEBUG DELETE trip] Trip: ${tripId}, User: ${session.user.id}, Email: ${session.user.email}`);
+        console.log(`[DEBUG DELETE trip] User traveler found:`, userTraveler ? { id: userTraveler.id, isOrganizer: userTraveler.isOrganizer, userId: userTraveler.userId } : 'None');
+
+        if (!userTraveler || !userTraveler.isOrganizer) {
+            return res.status(403).json({ error: 'Only organizers can delete trips' });
+        }
+
+        await trips.delete(tripId);
+        return res.status(200).json({ message: 'Trip deleted successfully' });
+    }
+
     if (req.method !== 'GET') {
-        res.setHeader('Allow', ['GET']);
+        res.setHeader('Allow', ['GET', 'DELETE']);
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { tripId } = req.query;
-
-    // Verify token
-    const token = extractToken(req.headers.authorization);
-    if (!token) {
-        return res.status(401).json({ error: 'Authorization token required' });
+    const session = await getServerSession(req, res, authOptions);
+    if (!session) {
+        return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const tokenData = verifyToken(token);
-    if (!tokenData.valid) {
-        return res.status(401).json({ error: 'Invalid or expired token' });
-    }
-
-    if (tokenData.tripId !== tripId) {
-        return res.status(403).json({ error: 'Token does not match trip' });
+    // Verify trip membership
+    const isMember = await travelers.isMember(tripId, session.user.id);
+    if (!isMember) {
+        return res.status(403).json({ error: 'Access denied: You are not a member of this trip' });
     }
 
     try {

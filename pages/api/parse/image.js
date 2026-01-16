@@ -73,7 +73,10 @@ export default async function handler(req, res) {
 
         Identify the TYPE of item: 'flight', 'stay', 'transit', or 'activity'.
 
-        Return JSON matching this structure:
+        If the image contains a ROUND TRIP flight or MULTIPLE items, return an ARRAY of objects.
+        If it's a single item, return a single object.
+
+        Each object should match this structure:
         {
             "type": "flight" | "stay" | "transit" | "activity",
             "title": "Airline + Flight Num, or Hotel Name",
@@ -115,8 +118,18 @@ export default async function handler(req, res) {
         console.log('Gemini Raw Response:', text);
 
         // Robust JSON extraction
-        const jsonStart = text.indexOf('{');
-        const jsonEnd = text.lastIndexOf('}');
+        let jsonStart = text.indexOf('{');
+        const arrayStart = text.indexOf('[');
+        if (arrayStart !== -1 && (jsonStart === -1 || arrayStart < jsonStart)) {
+            jsonStart = arrayStart;
+        }
+
+        let jsonEnd = text.lastIndexOf('}');
+        const arrayEnd = text.lastIndexOf(']');
+        if (arrayEnd !== -1 && (jsonEnd === -1 || arrayEnd > jsonEnd)) {
+            jsonEnd = arrayEnd;
+        }
+
         if (jsonStart === -1 || jsonEnd === -1) {
             throw new Error('Invalid response format: No JSON found');
         }

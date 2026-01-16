@@ -87,6 +87,9 @@ export function renderCalendar(container, store, openModal) {
         <span><span class="day-event-dot transit" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px;"></span> Transit</span>
         <span><span class="day-event-dot activity" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px;"></span> Activity</span>
       </div>
+
+      <!-- Day Details Container (Redesign) -->
+      <div id="calendar-day-details" class="day-details-container" style="display: none;"></div>
     `;
 
     // Bind events
@@ -109,10 +112,29 @@ export function renderCalendar(container, store, openModal) {
     // Day click handlers
     document.querySelectorAll('.calendar-day[data-date]').forEach(cell => {
       cell.addEventListener('click', () => {
+        // Deselect others
+        document.querySelectorAll('.calendar-day').forEach(c => c.classList.remove('selected'));
+
+        // Select clicked
+        cell.classList.add('selected');
+
         const date = new Date(cell.dataset.date);
         const events = store.getEventsForDate(date);
-        if (events.length > 0 || store.isDateInTrip(date)) {
-          openModal(renderDayDetail(date, events, store));
+
+        // Always show details pane if clicked, even if empty (user might want to see "No events")
+        // Or if in trip range.
+        if (store.isDateInTrip(date) || events.length > 0) {
+          const detailsContainer = document.getElementById('calendar-day-details');
+          detailsContainer.style.display = 'block';
+          detailsContainer.innerHTML = renderDayDetail(date, events, store);
+
+          // Scroll to details? Optional.
+          detailsContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+          // If outside trip and no events, maybe just show "Nothing planned"
+          const detailsContainer = document.getElementById('calendar-day-details');
+          detailsContainer.style.display = 'block';
+          detailsContainer.innerHTML = renderDayDetail(date, events, store); // renderDayDetail handles empty interactions
         }
       });
     });

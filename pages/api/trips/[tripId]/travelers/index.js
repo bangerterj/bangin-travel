@@ -69,11 +69,14 @@ async function createTraveler(req, res, tripId) {
         const traveler = await travelers.create(
             tripId,
             displayName.trim(),
-            email || '',
-            finalInitials,
-            finalColor,
-            notes || '',
-            isOrganizer || false
+            {
+                email: email || '',
+                initials: finalInitials,
+                color: finalColor,
+                notes: notes || '',
+                isOrganizer: isOrganizer || false,
+                coupleId: req.body.coupleId || null
+            }
         );
 
         return res.status(201).json(traveler);

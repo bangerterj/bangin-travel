@@ -11,12 +11,15 @@ export function renderSummary(container, store, callbacks) {
   const outboundFlight = flights.find(f => f.type === 'departure');
   const returnFlight = flights.find(f => f.type === 'return');
 
-  const startDate = new Date(trip.startDate);
-  const endDate = new Date(trip.endDate);
+  const startDate = trip.startDate ? new Date(trip.startDate + 'T00:00:00') : null;
+  const endDate = trip.endDate ? new Date(trip.endDate + 'T00:00:00') : null;
   const duration = store.getTripDuration();
 
   const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('en-US', {
+    if (!date) return '';
+    // Append time to ensure local date parsing instead of UTC
+    const d = typeof date === 'string' ? new Date(date + 'T00:00:00') : new Date(date);
+    return d.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric'
@@ -24,7 +27,9 @@ export function renderSummary(container, store, callbacks) {
   };
 
   const formatShortDate = (date) => {
-    return new Date(date).toLocaleDateString('en-US', {
+    if (!date) return '';
+    const d = typeof date === 'string' ? new Date(date + 'T00:00:00') : new Date(date);
+    return d.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric'
     });
@@ -34,9 +39,17 @@ export function renderSummary(container, store, callbacks) {
     <div class="summary-grid">
       <!-- Trip Header -->
       <div class="trip-header card">
-        <h1 class="trip-title">🗾 ${trip.name.toUpperCase()}</h1>
-        <p class="trip-dates">${formatDate(trip.startDate)} – ${formatDate(trip.endDate)} (${duration} days)</p>
-        <span class="trip-destination">📍 ${trip.destination}</span>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+                <h1 class="trip-title">${trip.name.toUpperCase()}</h1>
+                <p class="trip-dates">${formatDate(trip.startDate)} – ${formatDate(trip.endDate)} (${duration} days)</p>
+                <span class="trip-destination">📍 ${trip.destination}</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+                <button class="btn-text" id="edit-trip-btn" style="padding: 8px 0; font-weight: bold; font-size: 0.8rem; opacity: 0.7;">✏️ Edit Details</button>
+                <button class="btn-secondary" id="open-invite-btn" style="padding: 8px 12px; font-weight: bold;">✉️ Invite</button>
+            </div>
+        </div>
       </div>
 
       <!-- Map Container -->
@@ -44,7 +57,7 @@ export function renderSummary(container, store, callbacks) {
         <div id="trip-map"></div>
       </div>
 
-      <!-- Flight Summary -->
+      <!--Flight Summary-->
       <div class="card" style="grid-column: 1 / -1;">
         <div class="card-header">
           <h3>✈️ Flight Overview</h3>
@@ -85,7 +98,7 @@ export function renderSummary(container, store, callbacks) {
         </div>
       </div>
 
-      <!-- Travelers -->
+      <!--Travelers -->
       <div class="card">
         <div class="card-header">
           <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
@@ -112,7 +125,7 @@ export function renderSummary(container, store, callbacks) {
         </div>
       </div>
 
-      <!-- Quick Stats -->
+      <!--Quick Stats-->
       <div class="card">
         <div class="card-header">
           <h3>📊 Quick Stats</h3>
@@ -153,14 +166,24 @@ export function renderSummary(container, store, callbacks) {
       });
     });
 
-    const addBtn = container.querySelector('#add-traveler-btn');
-    if (addBtn) {
-      addBtn.addEventListener('click', () => {
-        callbacks.onAdd('travelers');
+    const inviteBtn = container.querySelector('#open-invite-btn');
+    if (inviteBtn) {
+      inviteBtn.addEventListener('click', () => {
+        callbacks.onInvite();
+      });
+    }
+
+    const editTripBtn = container.querySelector('#edit-trip-btn');
+    if (editTripBtn) {
+      editTripBtn.addEventListener('click', () => {
+        callbacks.onEditTrip();
       });
     }
   }
 }
+
+
+
 
 export function renderTravelerForm(traveler = null) {
   const isEdit = !!traveler;
@@ -176,7 +199,7 @@ export function renderTravelerForm(traveler = null) {
   ];
 
   return `
-    <div class="form-container">
+  <div class="form-container">
       <h2>${isEdit ? '✏️ Edit Traveler' : '👥 Add Traveler'}</h2>
       <form id="travelers-form">
         <div class="form-group">
@@ -213,17 +236,17 @@ export function renderTravelerForm(traveler = null) {
         </div>
       </form>
     </div>
-    
-    <script>
+
+  <script>
         // Simple script to update selection visual
         document.querySelectorAll('input[name="color"]').forEach(input => {
-            input.addEventListener('change', (e) => {
-                document.querySelectorAll('.color-swatch').forEach(s => s.style.borderColor = 'transparent');
-                e.target.nextElementSibling.style.borderColor = '#2c3e50';
-            });
+      input.addEventListener('change', (e) => {
+        document.querySelectorAll('.color-swatch').forEach(s => s.style.borderColor = 'transparent');
+        e.target.nextElementSibling.style.borderColor = '#2c3e50';
+      });
         });
-    </script>
-    `;
+  </script>
+`;
 }
 
 function initMap(store) {
@@ -231,22 +254,27 @@ function initMap(store) {
   if (!mapContainer || typeof L === 'undefined') {
     // Leaflet not loaded, show placeholder
     mapContainer.innerHTML = `
-      <div style="display: flex; align-items: center; justify-content: center; height: 100%; background: var(--cream); color: var(--text-secondary);">
-        <div style="text-align: center;">
-          <div style="font-size: 3rem; margin-bottom: 8px;">🗺️</div>
-          <p>Interactive map loading...</p>
-        </div>
-      </div>
-    `;
+  <div style="display: flex; align-items: center; justify-content: center; height: 100%; background: var(--cream); color: var(--text-secondary);">
+    <div style="text-align: center;">
+      <div style="font-size: 3rem; margin-bottom: 8px;">🗺️</div>
+      <p>Interactive map loading...</p>
+    </div>
+  </div>
+  `;
     return;
   }
 
-  // Create map centered on Japan
-  const map = L.map('trip-map').setView([36.2048, 138.2529], 5);
+  const trip = store.getActiveTrip();
+  if (!trip) return;
+
+  // Default center if no markers
+  const map = L.map('trip-map').setView([20, 0], 2);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors'
   }).addTo(map);
+
+  const bounds = [];
 
   // Add markers for stays
   const stayIcon = L.divIcon({
@@ -255,29 +283,37 @@ function initMap(store) {
     iconSize: [24, 24]
   });
 
-  const trip = store.getActiveTrip();
-  if (!trip) return;
-
   trip.stays.forEach(stay => {
-    if (stay.coordinates) {
-      L.marker([stay.coordinates.lat, stay.coordinates.lng], { icon: stayIcon })
+    if (stay.coordinates && stay.coordinates.lat && stay.coordinates.lng) {
+      const pos = [stay.coordinates.lat, stay.coordinates.lng];
+      L.marker(pos, { icon: stayIcon })
         .addTo(map)
         .bindPopup(`<strong>${stay.name}</strong><br>${stay.address}`);
+      bounds.push(pos);
     }
   });
 
   // Add markers for activities
   const activityIcon = L.divIcon({
     className: 'map-marker',
-    html: '<div style="background: #e67e22; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #2c3e50;"></div>',
+    html: '<div style="background: #e67e22; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #2c3e50; display: flex; align-items: center; justify-content: center; color: white; font-size: 10px;">📍</div>',
     iconSize: [20, 20]
   });
 
-  trip.activities.filter(a => a.priority === 'must-do').forEach(activity => {
-    if (activity.coordinates) {
-      L.marker([activity.coordinates.lat, activity.coordinates.lng], { icon: activityIcon })
+  trip.activities.forEach(activity => {
+    if (activity.coordinates && activity.coordinates.lat && activity.coordinates.lng) {
+      const pos = [activity.coordinates.lat, activity.coordinates.lng];
+      L.marker(pos, { icon: activityIcon })
         .addTo(map)
         .bindPopup(`<strong>${activity.name}</strong><br>${activity.location}`);
+      bounds.push(pos);
     }
   });
+
+  // Smart bounds: fit map to all markers
+  if (bounds.length > 0) {
+    map.fitBounds(bounds, { padding: [50, 50] });
+  } else if (trip.destination) {
+    // Optionally: could geocode trip destination here if no specific markers
+  }
 }

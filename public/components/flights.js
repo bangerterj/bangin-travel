@@ -1,5 +1,5 @@
-/**
- * Flights Component - Flight cards with traveler assignments
+﻿/**
+ * Flights Component - Handles rendering and form for flight data
  */
 
 export function renderFlights(container, store, callbacks) {
@@ -8,19 +8,44 @@ export function renderFlights(container, store, callbacks) {
 
   const { flights, travelers: allTravelers } = trip;
 
-  const formatDateTime = (dateStr) => {
-    const date = new Date(dateStr);
-    return {
-      time: date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: false }),
-      date: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-    };
-  };
+  const formatDateTime = (dateStr, timezone) => {
+    if (!dateStr) return { time: '', date: '', offset: '' }; // Added offset
+    // robust parsing for purely local display (no timezone conversion)
+    // expected format: YYYY-MM-DDTHH:mm
+    try {
+      const [d, t] = dateStr.split('T');
+      if (!d || !t) throw new Error('Invalid format');
 
-  const calculateDuration = (dep, arr) => {
-    const diff = new Date(arr) - new Date(dep);
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    return `${hours}h ${mins}m`;
+      const [year, month, day] = d.split('-').map(Number);
+      const [hour, minute] = t.split(':').map(Number);
+
+      const dateObj = new Date(year, month - 1, day, hour, minute);
+
+      // Get UTC offset string if timezone is provided
+      let offset = '';
+      if (timezone) {
+        try {
+          // Intl can give us "GMT+9" or "GMT-7"
+          const part = new Intl.DateTimeFormat('en-US', { timeZone: timezone, timeZoneName: 'shortOffset' })
+            .formatToParts(dateObj).find(p => p.type === 'timeZoneName');
+          if (part) offset = part.value.replace('GMT', 'UTC');
+        } catch (e) { console.error('Offset calc error', e); }
+      }
+
+      return {
+        time: dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }), // Changed to 12h
+        date: dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+        offset: offset
+      };
+    } catch (e) {
+      // Fallback
+      const date = new Date(dateStr);
+      return {
+        time: date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+        date: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+        offset: ''
+      };
+    }
   };
 
   const getBadgeClass = (type) => {
@@ -41,10 +66,10 @@ export function renderFlights(container, store, callbacks) {
     }
   };
 
-  const flightCards = flights.map(flight => {
-    const dep = formatDateTime(flight.departureTime);
-    const arr = formatDateTime(flight.arrivalTime);
-    const duration = calculateDuration(flight.departureTime, flight.arrivalTime);
+  const flightCards = flights && flights.length > 0 ? flights.map(flight => {
+    // Pass timezone from metadata
+    const dep = formatDateTime(flight.departureTime, flight.metadata?.departureTimezone);
+    const arr = formatDateTime(flight.arrivalTime, flight.metadata?.arrivalTimezone);
     const travelers = store.getTravelersByIds(flight.travelers);
     const missingTravelers = allTravelers.filter(t => !flight.travelers.includes(t.id));
 
@@ -53,7 +78,7 @@ export function renderFlights(container, store, callbacks) {
         <div class="flight-card-header">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span class="badge ${getBadgeClass(flight.type)}">${getBadgeLabel(flight.type)}</span>
-            <span class="text-muted text-small">${flight.airline} ${flight.flightNumber}</span>
+            <span class="text-muted text-small flight-card-title">${flight.airline} ${flight.flightNumber}</span>
           </div>
           ${callbacks ? `
             <button class="btn-icon edit-btn" data-id="${flight.id}" title="Edit Flight">✏️</button>
@@ -63,8 +88,10 @@ export function renderFlights(container, store, callbacks) {
           <div class="flight-route-display">
             <div class="flight-endpoint">
               <div class="airport-code">${flight.departureAirport}</div>
-              <div class="airport-city">${flight.departureCity}</div>
-              <div class="flight-time">${dep.time}</div>
+              <div class="flight-time-group">
+                <div class="flight-time">${dep.time}</div>
+                ${dep.offset ? `<div class="flight-offset">${dep.offset}</div>` : ''}
+              </div>
               <div class="flight-date">${dep.date}</div>
             </div>
             <div class="flight-path">
@@ -73,30 +100,24 @@ export function renderFlights(container, store, callbacks) {
                 <span class="plane">✈️</span>
                 <span class="line"></span>
               </div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+                ${flight.duration || ''}
+              </div>
             </div>
             <div class="flight-endpoint arrival">
               <div class="airport-code">${flight.arrivalAirport}</div>
-              <div class="airport-city">${flight.arrivalCity}</div>
-              <div class="flight-time">${arr.time}</div>
+              <div class="flight-time-group">
+                <div class="flight-time">${arr.time}</div>
+                ${arr.offset ? `<div class="flight-offset">${arr.offset}</div>` : ''}
+              </div>
               <div class="flight-date">${arr.date}</div>
             </div>
           </div>
-          <div class="flight-details">
-            <div class="flight-detail-item">
-              <span class="flight-detail-label">Duration</span>
-              <span class="flight-detail-value">${duration}</span>
-            </div>
-            ${flight.confirmationCode ? `
-            <div class="flight-detail-item">
-              <span class="flight-detail-label">Confirmation</span>
-              <span class="flight-detail-value">${flight.confirmationCode}</span>
-            </div>
-            ` : ''}
-          </div>
+          
         </div>
         <div class="entity-card-footer">
           <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px;">
-            👥 Travelers on this flight:
+            👥 Travelers:
           </div>
           <div class="traveler-list">
             ${travelers.map(t => `
@@ -113,13 +134,16 @@ export function renderFlights(container, store, callbacks) {
           ` : ''}
           ${flight.notes ? `
             <div style="margin-top: 12px; padding: 8px 12px; background: var(--cream); border-radius: 6px; font-size: 0.75rem;">
-              📝 ${flight.notes}
+              📌 ${flight.notes}
             </div>
           ` : ''}
         </div>
       </div>
     `;
-  }).join('');
+  }).join('') : `<div class="empty-state">
+    <div style="font-size: 3rem; margin-bottom: 1rem;">✈️</div>
+    <p>No flights added yet.</p>
+  </div>`;
 
   container.innerHTML = `
     <div class="tab-header">
@@ -151,34 +175,96 @@ export function renderFlights(container, store, callbacks) {
   }
 }
 
-export function renderFlightForm(flight = null) {
+export function renderFlightForm(flight = null, store = null) {
   const isEdit = !!flight;
-  // Default values if adding
+  // Use passed store or fallback to window.store
+  const currentStore = store || window.store;
+  let allTravelerIds = [];
+
+  if (currentStore) {
+    const activeTrip = currentStore.getActiveTrip();
+    if (activeTrip && activeTrip.travelers) {
+      allTravelerIds = activeTrip.travelers.map(t => t.id);
+    }
+  }
+
   const data = flight || {
     type: 'departure',
     airline: '',
     flightNumber: '',
     departureAirport: '',
-    departureCity: '',
     arrivalAirport: '',
-    arrivalCity: '',
     departureTime: '',
     arrivalTime: '',
-    confirmationCode: '',
+    duration: '',
     notes: '',
-    travelers: []
+    travelers: allTravelerIds, // Default to ALL travelers for new items
+    cost: '',
+    paidBy: ''
   };
 
-  const formatDateForInput = (dateStr) => {
+  const formatDateForInput = (dateStr, timezone) => {
     if (!dateStr) return '';
-    const d = new Date(dateStr);
-    // datetime-local expects YYYY-MM-DDThh:mm
-    return d.toISOString().slice(0, 16);
+    try {
+      const date = new Date(dateStr);
+      if (timezone) {
+        // "en-CA" is a trick to get YYYY-MM-DD, mixed with hour12: false for 24h time
+        // We need YYYY-MM-DDTHH:mm
+        const opts = {
+          timeZone: timezone,
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+        };
+        const parts = new Intl.DateTimeFormat('en-CA', opts).formatToParts(date);
+        const map = parts.reduce((acc, p) => ({ ...acc, [p.type]: p.value }), {});
+        return `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}`;
+      }
+      // Fallback: use UTC slice if no timezone (as stored DB value is UTC)
+      return date.toISOString().slice(0, 16);
+    } catch (e) {
+      console.error('Date format error', e);
+      return '';
+    }
   };
+
+  const renderImportZone = () => {
+    if (isEdit) return '';
+    return `
+      <div class="import-zone" id="import-zone">
+        <div class="import-icon">📄</div>
+        <div class="import-text">
+            <strong>Drag screenshot here</strong> or <span class="cmd-shortcut">Ctrl+V / Cmd+V</span> to paste
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+            AI will auto-fill details
+        </div>
+        <input type="file" id="import-file-input" accept="image/*" style="display: none;">
+        <button type="button" onclick="document.getElementById('import-file-input').click()" class="btn-text" style="font-size: 0.875rem; margin-top: 8px;">
+            Or click to upload
+        </button>
+      </div>
+      <div class="form-divider"><span>OR ENTER MANUALLY</span></div>
+    `;
+  };
+
+  const getOffsetHint = (timezone) => {
+    if (!timezone) return '';
+    try {
+      const part = new Intl.DateTimeFormat('en-US', { timeZone: timezone, timeZoneName: 'shortOffset' })
+        .formatToParts(new Date()).find(p => p.type === 'timeZoneName');
+      const offset = part ? part.value.replace('GMT', 'UTC') : '';
+      return offset ? ` <span style="font-weight: 400; color: var(--text-muted); font-size: 0.75em;">(${offset})</span>` : '';
+    } catch (e) { return ''; }
+  };
+  const depOffset = getOffsetHint(data.departureTimezone || data.metadata?.departureTimezone);
+  const arrOffset = getOffsetHint(data.arrivalTimezone || data.metadata?.arrivalTimezone);
 
   return `
     <div class="form-container">
-      <h2>${isEdit ? '✏️ Edit Flight' : '✈️ Add Flight'}</h2>
+      <h2>${isEdit ? '📝 Edit Flight' : '✈️ Add Flight'}</h2>
+      
+      ${renderImportZone()}
+
       <form id="flights-form">
         <div class="form-group">
           <label>Flight Type</label>
@@ -206,35 +292,54 @@ export function renderFlightForm(flight = null) {
                 <input type="text" name="departureAirport" value="${data.departureAirport}" placeholder="e.g. SFO" required>
             </div>
             <div class="form-group">
-                <label for="departureCity">Dep City</label>
-                <input type="text" name="departureCity" value="${data.departureCity}" placeholder="e.g. San Francisco" required>
+                <label for="arrivalAirport">Arr Airport</label>
+                <input type="text" name="arrivalAirport" value="${data.arrivalAirport}" placeholder="e.g. NRT" required>
             </div>
-        </div>
-
-        <div class="form-group">
-             <label for="departureTime">Departure Time</label>
-             <input type="datetime-local" name="departureTime" value="${formatDateForInput(data.departureTime)}" required>
         </div>
 
         <div class="form-row">
             <div class="form-group">
-                <label for="arrivalAirport">Arr Airport</label>
-                <input type="text" name="arrivalAirport" value="${data.arrivalAirport}" placeholder="e.g. NRT" required>
+                 <label for="departureTime">Dep Time (Local${depOffset})</label>
+                 <input type="datetime-local" name="departureTime" value="${formatDateForInput(data.startAt || data.departureTime, data.departureTimezone || data.metadata?.departureTimezone)}" required>
             </div>
             <div class="form-group">
-                <label for="arrivalCity">Arr City</label>
-                <input type="text" name="arrivalCity" value="${data.arrivalCity}" placeholder="e.g. Tokyo" required>
+                 <label for="arrivalTime">Arr Time (Local${arrOffset})</label>
+                 <input type="datetime-local" name="arrivalTime" value="${formatDateForInput(data.endAt || data.arrivalTime, data.arrivalTimezone || data.metadata?.arrivalTimezone)}" required>
+            </div>
+        </div >
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="duration">Duration</label>
+                <input type="text" name="duration" value="${data.duration || ''}" placeholder="e.g. 11h 20m">
+            </div>
+            <div class="form-group">
+                <label for="cost">Cost (Total)</label>
+                <input type="number" name="cost.amount" value="${data.cost?.amount || data.metadata?.cost?.amount || ''}" placeholder="0.00" step="0.01" min="0" class="currency-input">
+                <input type="hidden" name="cost.currency" value="${data.cost?.currency || 'USD'}">
             </div>
         </div>
 
-        <div class="form-group">
-             <label for="arrivalTime">Arrival Time</label>
-             <input type="datetime-local" name="arrivalTime" value="${formatDateForInput(data.arrivalTime)}" required>
-        </div>
+        <script>
+            // Format currency on blur
+            document.querySelectorAll('.currency-input').forEach(input => {
+                input.addEventListener('blur', (e) => {
+                    if (e.target.value) {
+                        e.target.value = parseFloat(e.target.value).toFixed(2);
+                    }
+                });
+            });
+        </script>
 
         <div class="form-group">
-            <label for="confirmationCode">Confirmation Code</label>
-            <input type="text" name="confirmationCode" value="${data.confirmationCode}" placeholder="e.g. ABC123XYZ">
+            <label for="paidBy">Paid by</label>
+            <select name="paidBy">
+                <option value="">-- Select Payer --</option>
+                ${window.store?.getActiveTrip()?.travelers.map(t => {
+    const payerId = data.paidBy || data.cost?.paidBy || (data.metadata?.cost?.paidBy);
+    return `<option value="${t.id}" ${payerId === t.id ? 'selected' : ''}>${t.name}</option>`;
+  }).join('')}
+            </select>
         </div>
 
         <div class="form-group">
@@ -253,22 +358,19 @@ export function renderFlightForm(flight = null) {
            ${isEdit ? '<button type="button" id="delete-btn" class="btn-danger">🗑️ Delete</button>' : '<div></div>'}
            <button type="submit" class="btn-primary">Save Flight</button>
         </div>
-      </form>
-    </div>
+      </form >
+    </div >
     `;
 }
 
 function generateTravelerCheckboxes(selectedIds = []) {
-  // We need access to store.getActiveTrip() here but store isn't passed to renderForm
-  // We can use window.store as a fallback since it's exposed in app.js for debug
-  // Or we could pass travelers list to renderFlightForm
   const trip = window.store?.getActiveTrip();
   if (!trip) return '';
 
   return trip.travelers.map(t => `
-        <label class="checkbox-label">
-            <input type="checkbox" name="travelers" value="${t.id}" ${selectedIds.includes(t.id) ? 'checked' : ''}>
-            ${t.name}
-        </label>
-    `).join('');
+    <label class="checkbox-label">
+      <input type="checkbox" name="travelers" value="${t.id}" ${selectedIds.includes(t.id) ? 'checked' : ''}>
+        ${t.name}
+    </label>
+  `).join('');
 }
