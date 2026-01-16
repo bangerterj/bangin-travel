@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]";
-import { invitations, travelers } from "../../../lib/db";
+import { invitations, travelers } from "../../../../lib/db";
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
