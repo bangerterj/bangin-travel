@@ -35,27 +35,36 @@
         <section id="dashboard-view" class="view hidden">
             <header class="main-header">
                 <div class="header-content">
+                    <!-- Hamburger Menu Button (mobile) -->
+                    <button class="hamburger-btn" id="hamburger-btn" aria-label="Menu">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+
                     <div class="header-left">
-                        <div class="brand">🚐 Bangin' Travel</div>
+                        <div class="brand">
+                            <span class="brand-icon">🚐</span>
+                            <span class="brand-text">Bangin' Travel</span>
+                        </div>
                         <div id="trip-switcher-container"></div>
                     </div>
+
+                    <nav class="main-nav">
+                        <button class="nav-tab active" data-tab="map">Map</button>
+                        <button class="nav-tab" data-tab="calendar">Calendar</button>
+                        <button class="nav-tab" data-tab="flights">Flights</button>
+                        <button class="nav-tab" data-tab="stays">Stays</button>
+                        <button class="nav-tab" data-tab="transit">Transit</button>
+                        <button class="nav-tab" data-tab="activities">Activities</button>
+                        <button class="nav-tab" data-tab="ledger">Ledger</button>
+                    </nav>
+
                     <div id="header-right" class="header-right"></div>
                 </div>
-
-
-
-                <nav class="main-nav">
-                    <button class="nav-tab active" data-tab="summary">Summary</button>
-                    <button class="nav-tab" data-tab="calendar">Calendar</button>
-                    <button class="nav-tab" data-tab="flights">Flights</button>
-                    <button class="nav-tab" data-tab="stays">Stays</button>
-                    <button class="nav-tab" data-tab="transit">Transit</button>
-                    <button class="nav-tab" data-tab="activities">Activities</button>
-                    <button class="nav-tab" data-tab="ledger">Ledger</button>
-                </nav>
             </header>
             <main class="app-content">
-                <section id="tab-summary" class="tab-pane active"></section>
+                <section id="tab-map" class="tab-pane active"></section>
                 <section id="tab-calendar" class="tab-pane"></section>
                 <section id="tab-flights" class="tab-pane"></section>
                 <section id="tab-stays" class="tab-pane"></section>
@@ -64,6 +73,34 @@
                 <section id="tab-ledger" class="tab-pane"></section>
             </main>
         </section>
+
+        <!-- Mobile Navigation Drawer -->
+        <div class="drawer-overlay" id="drawer-overlay"></div>
+        <div class="mobile-drawer" id="mobile-drawer">
+            <div class="drawer-header">
+                <div class="drawer-user">
+                    <div class="drawer-avatar">👤</div>
+                    <div class="drawer-user-info">
+                        <div class="drawer-user-name" id="drawer-user-name">Traveler</div>
+                        <div class="drawer-user-email" id="drawer-user-email"></div>
+                    </div>
+                </div>
+            </div>
+            <nav class="drawer-nav">
+                <button class="drawer-nav-item" data-tab="map"><span class="icon">🗺️</span> Map</button>
+                <button class="drawer-nav-item" data-tab="calendar"><span class="icon">📅</span> Calendar</button>
+                <button class="drawer-nav-item" data-tab="flights"><span class="icon">✈️</span> Flights</button>
+                <button class="drawer-nav-item" data-tab="stays"><span class="icon">🏨</span> Stays</button>
+                <button class="drawer-nav-item" data-tab="transit"><span class="icon">🚃</span> Transit</button>
+                <button class="drawer-nav-item" data-tab="activities"><span class="icon">📍</span> Activities</button>
+                <button class="drawer-nav-item" data-tab="ledger"><span class="icon">💰</span> Ledger</button>
+            </nav>
+            <div class="drawer-divider"></div>
+            <div class="drawer-footer">
+                <button class="drawer-footer-item" id="drawer-settings">⚙️ Settings</button>
+                <button class="drawer-footer-item" id="drawer-logout">🚪 Log Out</button>
+            </div>
+        </div>
 
         <!-- Modal -->
         <div id="modal-container" class="modal-overlay hidden">

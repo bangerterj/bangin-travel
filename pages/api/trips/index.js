@@ -30,7 +30,7 @@ export default async function handler(req, res) {
 
 async function createTrip(req, res, session) {
     try {
-        const { name, destination, startDate, endDate, timezone } = req.body;
+        const { name, destination, startDate, endDate, timezone, location } = req.body;
 
         if (!name || typeof name !== 'string' || name.trim().length === 0) {
             return res.status(400).json({ error: 'Trip name is required' });
@@ -41,7 +41,8 @@ async function createTrip(req, res, session) {
             destination || '',
             startDate || '',
             endDate || '',
-            timezone || 'UTC'
+            timezone || 'UTC',
+            location || null
         );
 
         // Also create an ORGANIZER traveler for the creator

@@ -344,55 +344,136 @@ h4 {
 /* ============================================
    HEADER & NAVIGATION
    ============================================ */
+/* ============================================
+   RESPONSIVE HEADER LAYOUT
+   ============================================ */
 .main-header {
   background: var(--white);
   border-bottom: var(--border-width) solid var(--border-color);
-  padding: var(--space-md) var(--space-lg);
   position: sticky;
   top: 0;
-  z-index: 2000;
+  z-index: 100;
+  padding: 0;
+  /* Let children handle padding or grid gaps */
 }
 
+/* Base Mobile Layout (Default) */
 .header-content {
-  max-width: 1400px;
-  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-lg);
+  padding: var(--space-md);
+  height: 70px;
 }
 
-.brand {
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-  color: var(--dark-ink);
-  white-space: nowrap;
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
 }
 
 .main-nav {
   display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  flex-wrap: wrap;
+  overflow-x: auto;
+  padding: 0 var(--space-md);
+  border-top: var(--border-width) solid var(--border-color);
+  background: var(--white);
+  -ms-overflow-style: none;
+  /* Hide scrollbar IE/Edge */
+  scrollbar-width: none;
+  /* Hide scrollbar Firefox */
+}
+
+.main-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .nav-tab {
+  padding: var(--space-md);
+  white-space: nowrap;
   background: none;
-  border: 2px solid transparent;
-  padding: var(--space-sm) var(--space-md);
+  border: none;
   font-family: var(--font-heading);
   font-weight: 600;
-  font-size: 0.875rem;
   color: var(--text-secondary);
   cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: var(--transition-fast);
-  white-space: nowrap;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s;
 }
 
-.nav-tab:hover {
-  color: var(--dark-ink);
-  background: var(--cream);
+.nav-tab.active {
+  color: var(--primary-blue);
+  border-bottom-color: var(--primary-blue);
+}
+
+/* Tablet Layout (min-width: 768px) */
+@media (min-width: 768px) {
+  .main-header {
+    /* Keep stack layout but maybe refine padding */
+  }
+}
+
+/* Desktop Layout (min-width: 1024px) */
+@media (min-width: 1024px) {
+  .main-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 70px;
+    padding: 0 var(--space-lg);
+  }
+
+  /* Flatten structure to put everything in one row */
+  .header-content {
+    display: contents;
+    /* Removes this wrapper from layout flow */
+  }
+
+  .header-left {
+    display: contents;
+    /* Removes this wrapper too */
+  }
+
+  /* Explicit Order for Single Row */
+  .hamburger-btn {
+    display: none;
+  }
+
+  .brand {
+    order: 1;
+    margin-right: var(--space-lg);
+  }
+
+  #trip-switcher-container {
+    order: 2;
+    margin-right: var(--space-lg);
+  }
+
+  /* Nav moves to middle */
+  .main-nav {
+    order: 3;
+    flex: 1;
+    border-top: none;
+    padding: 0;
+    justify-content: center;
+    /* Center tabs */
+    height: 100%;
+    /* Fill header height */
+  }
+
+  .nav-tab {
+    height: 100%;
+    /* Fill height */
+    padding: 0 var(--space-md);
+    display: flex;
+    align-items: center;
+  }
+
+  /* Profile moves to end */
+  .header-right {
+    order: 4;
+    margin-left: var(--space-lg);
+  }
 }
 
 .nav-tab.active {
@@ -1430,7 +1511,7 @@ h4 {
   align-items: center;
   justify-content: center;
   padding: var(--space-lg);
-  z-index: 1000;
+  z-index: 9999;
   backdrop-filter: blur(4px);
 }
 
@@ -1516,27 +1597,284 @@ h4 {
 }
 
 /* ============================================
-   RESPONSIVE
+   RESPONSIVE - MOBILE
    ============================================ */
-@media (max-width: 768px) {
+
+/* Hamburger Button (hidden on desktop) */
+.hamburger-btn {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.hamburger-btn span {
+  display: block;
+  width: 24px;
+  height: 3px;
+  background: var(--accent-orange);
+  border-radius: 2px;
+  transition: var(--transition-fast);
+}
+
+/* Mobile Navigation Drawer */
+.mobile-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 280px;
+  height: 100vh;
+  background: var(--dark-ink);
+  z-index: 10000;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.mobile-drawer.open {
+  transform: translateX(0);
+}
+
+.drawer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease;
+}
+
+.drawer-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.drawer-header {
+  padding: 24px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.drawer-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.drawer-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--accent-orange);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.drawer-user-info {
+  color: white;
+}
+
+.drawer-user-name {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.drawer-user-email {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.drawer-nav {
+  padding: 16px 0;
+}
+
+.drawer-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-size: 1rem;
+  font-family: var(--font-body);
+}
+
+.drawer-nav-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.drawer-nav-item.active {
+  background: var(--accent-orange);
+  color: white;
+}
+
+.drawer-nav-item .icon {
+  font-size: 1.25rem;
+}
+
+.drawer-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 8px 0;
+}
+
+.drawer-footer {
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: auto;
+}
+
+.drawer-footer-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.875rem;
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-body);
+}
+
+.drawer-footer-item:hover {
+  color: white;
+}
+
+/* ============================================
+   TABLET LANDSCAPE (768-1024px)
+   Compact nav tabs with icons, no hamburger yet
+   ============================================ */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .main-header {
+    padding: var(--space-sm) var(--space-md);
+  }
+
   .header-content {
-    flex-direction: column;
-    gap: var(--space-md);
+    gap: var(--space-sm);
   }
 
+  .brand {
+    font-size: 1rem;
+  }
+
+  /* Compact nav tabs */
+  .nav-tab {
+    padding: var(--space-xs) var(--space-sm);
+    font-size: 0.75rem;
+  }
+
+  /* Hide text, show icons on very tight space */
+  .trip-switcher-name {
+    max-width: 100px;
+  }
+
+  /* Slightly condensed calendar - 5 day view */
+  .timeline-grid {
+    grid-template-columns: repeat(5, 1fr) !important;
+  }
+
+  .day-column:nth-child(n+6) {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+
+  /* Condensed Header */
+  .main-header {
+    padding: 10px 12px;
+  }
+
+  .header-content {
+    flex-direction: row;
+    gap: var(--space-xs);
+  }
+
+  .brand {
+    font-size: 0.85rem;
+  }
+
+  /* Hide desktop nav, show hamburger */
   .main-nav {
-    width: 100%;
-    justify-content: center;
+    display: none;
   }
 
+  .hamburger-btn {
+    display: flex;
+  }
+
+  /* Hide user info on mobile - it's in the drawer */
+  .header-right {
+    display: none;
+  }
+
+  /* Simplify trip switcher on mobile */
+  .trip-switcher-btn {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    border: none;
+    background: transparent;
+  }
+
+  .trip-switcher-icon {
+    display: none;
+  }
+
+  .trip-switcher-arrow {
+    font-size: 0.5rem;
+  }
+
+  .header-left {
+    gap: var(--space-xs);
+  }
+
+  /* App Content */
   .app-content {
     padding: var(--space-md);
   }
 
   .trip-title {
-    font-size: 1.75rem;
+    font-size: 1.5rem;
   }
 
+  /* Full-screen Modals */
+  .modal-overlay {
+    padding: 0;
+  }
+
+  .modal-content {
+    width: 100%;
+    height: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+    border: none;
+  }
+
+  .modal-close {
+    top: 12px;
+    right: 12px;
+  }
+
+  /* Flight Cards */
   .flight-route-display {
     flex-direction: column;
     gap: var(--space-lg);
@@ -1551,6 +1889,7 @@ h4 {
     width: 100%;
   }
 
+  /* Stay Cards */
   .stay-card-content {
     grid-template-columns: 1fr;
   }
@@ -1560,6 +1899,7 @@ h4 {
     height: 160px;
   }
 
+  /* Calendar */
   .calendar-day {
     min-height: 60px;
     padding: var(--space-xs);
@@ -1567,6 +1907,37 @@ h4 {
 
   .day-number {
     font-size: 0.75rem;
+  }
+
+  /* Timeline Calendar - 3 day view on tablets */
+  .timeline-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    min-width: 300px !important;
+  }
+
+  .day-column:nth-child(n+4) {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+
+  /* Very small screens - single day view */
+  .timeline-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .day-column:nth-child(n+2) {
+    display: none;
+  }
+
+  /* Smaller header */
+  .main-header {
+    padding: 10px 12px;
+  }
+
+  .brand {
+    font-size: 0.9rem;
   }
 }
 
@@ -1798,10 +2169,10 @@ h4 {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  background: var(--cream);
-  border: 2px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: var(--space-sm) var(--space-md);
+  background: transparent;
+  border: 1px solid rgba(44, 62, 80, 0.2);
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
   font-family: var(--font-heading);
   font-weight: 600;
   font-size: 0.875rem;
@@ -1810,7 +2181,8 @@ h4 {
 }
 
 .trip-switcher-btn:hover {
-  background: var(--white);
+  background: var(--cream);
+  border-color: var(--border-color);
 }
 
 .trip-switcher-icon {
@@ -1892,10 +2264,152 @@ h4 {
   gap: var(--space-md);
 }
 
-.header-left {
+@media (min-width: 769px) {
+  .header-left {
+    flex: 1;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+
+  .header-right .user-email {
+    font-weight: 500;
+    color: var(--dark-ink);
+  }
+
+  .header-right .btn-text,
+  .header-right .btn-secondary {
+    font-size: 0.75rem;
+    padding: var(--space-xs) var(--space-sm);
+  }
+}
+
+/* Map View Specifics */
+#tab-map {
+  height: 100%;
+  flex-direction: column;
+}
+
+#tab-map.active {
+  display: flex;
+}
+
+.map-view-container {
+  flex: 1;
+  position: relative;
+  /* Context for absolute children */
+  /* Break out of parent padding */
+  margin: calc(var(--space-xl) * -1);
+  width: calc(100% + (var(--space-xl) * 2));
+  height: calc(100% + (var(--space-xl) * 2));
+}
+
+@media (max-width: 768px) {
+  .map-view-container {
+    /* Mobile app-content padding might be different? usually space-md */
+    margin: calc(var(--space-md) * -1);
+    width: calc(100% + (var(--space-md) * 2));
+    height: calc(100% + (var(--space-md) * 2));
+  }
+}
+
+/* Base Switcher Visibility (Hidden on Mobile) */
+#trip-switcher-container {
+  display: none;
+}
+
+/* Tablet & Desktop: Show Header Switcher (Raised to 1280px) */
+@media (min-width: 1280px) {
+  #trip-switcher-container {
+    display: block;
+  }
+}
+
+/* Brand Styling */
+.brand {
   display: flex;
   align-items: center;
-  gap: var(--space-md);
+  gap: var(--space-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.brand-icon {
+  font-size: 1.5rem;
+}
+
+.brand-text {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  color: var(--dark-ink);
+}
+
+.brand:hover {
+  transform: scale(1.02);
+  filter: brightness(1.1);
+}
+
+/* Trip Switcher Two-Row Layout */
+.trip-switcher-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+
+.trip-switcher-dates {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* Map Info Bar: Mobile Only */
+.map-info-bar {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (min-width: 1280px) {
+
+  /* Hide Map Switcher on Desktop (1280px+) */
+  .map-info-bar {
+    display: none;
+  }
+}
+
+/* Style the switcher button inside map to match original info bar pill */
+.map-info-bar .trip-switcher-btn {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 8px 16px;
+  border-radius: 20px;
+}
+
+.map-info-bar strong {
+  color: var(--primary-blue);
+  font-family: var(--font-heading);
+}
+
+#dashboard-view {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* Prevent body scroll, handle inside tabs */
 }
 
 @media (max-width: 768px) {
@@ -2259,6 +2773,7 @@ h4 {
     opacity: 0.6;
   }
 }
+
 /* ============================================
    CALENDAR DETAILS (Redesign)
    ============================================ */
@@ -2301,10 +2816,21 @@ h4 {
   border-left: 4px solid var(--text-color);
 }
 
-.timeline-item.flight { border-left-color: var(--badge-departure); }
-.timeline-item.stay { border-left-color: var(--badge-internal); }
-.timeline-item.activity { border-left-color: var(--priority-must); }
-.timeline-item.transit { border-left-color: var(--badge-return); }
+.timeline-item.flight {
+  border-left-color: var(--badge-departure);
+}
+
+.timeline-item.stay {
+  border-left-color: var(--badge-internal);
+}
+
+.timeline-item.activity {
+  border-left-color: var(--priority-must);
+}
+
+.timeline-item.transit {
+  border-left-color: var(--badge-return);
+}
 
 .timeline-time {
   font-family: var(--font-mono);
@@ -2333,7 +2859,6 @@ h4 {
   border-color: var(--primary-color) !important;
   background-color: var(--cream) !important;
   transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   z-index: 2;
 }
-

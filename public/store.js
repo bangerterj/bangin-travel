@@ -233,7 +233,8 @@ export const store = {
             destination: tripData.destination,
             startDate: tripData.startDate,
             endDate: tripData.endDate,
-            timezone: tripData.timezone || 'UTC'
+            timezone: tripData.timezone || 'UTC',
+            location: tripData.location || null
           })
         });
         if (newTrip) {
@@ -254,7 +255,8 @@ export const store = {
       destination: tripData.destination,
       startDate: tripData.startDate,
       endDate: tripData.endDate,
-      timezone: tripData.timezone || 'UTC'
+      timezone: tripData.timezone || 'UTC',
+      location: tripData.location || null
     };
     this.data.trips.push(newTrip);
     this.data.config.activeTripId = newTrip.id;

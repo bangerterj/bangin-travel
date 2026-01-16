@@ -130,7 +130,18 @@ export function renderTripSetupForm() {
         
         <div class="form-group">
           <label for="trip-destination">Destination *</label>
-          <input type="text" id="trip-destination" placeholder="e.g. Tokyo & Nagano" required>
+          <input type="text" id="trip-destination" placeholder="e.g. Tokyo & Nagano" required autocomplete="off">
+        </div>
+
+        <div class="form-group">
+            <label for="trip-timezone">Timezone</label>
+            <select id="trip-timezone" class="form-select">
+                <option value="UTC">UTC</option>
+                ${Intl.supportedValuesOf('timeZone').map(tz =>
+    `<option value="${tz}" ${tz === Intl.DateTimeFormat().resolvedOptions().timeZone ? 'selected' : ''}>${tz}</option>`
+  ).join('')}
+            </select>
+            <small class="text-secondary">Used for calendar and itinerary timing.</small>
         </div>
         
         <div class="form-row">
@@ -160,7 +171,7 @@ export function renderTripSwitcher(store) {
   const trips = allTrips.filter(t => !t.isArchived);
   const activeTrip = store.getActiveTrip();
 
-  if (!activeTrip || trips.length <= 1) {
+  if (!activeTrip) { // Allow navigation back to All Trips if activeTrip exists
     return `<span class="current-trip-name">${activeTrip?.name || 'No Trip'}</span>`;
   }
 
@@ -172,14 +183,36 @@ export function renderTripSwitcher(store) {
     return '✈️';
   };
 
+  function formatDateRange(start, end) {
+    if (!start) return '';
+    // Fix timezone issue: treat YYYY-MM-DD as local date by appending time or splitting
+    // Simplest reliable way for display: append T12:00:00 to avoid midnight shift
+    const toDate = (dateStr) => {
+      if (!dateStr) return null;
+      if (dateStr.includes('T')) return new Date(dateStr);
+      return new Date(dateStr + 'T12:00:00');
+    };
+
+    const s = toDate(start);
+    const e = toDate(end);
+    const opts = { month: 'short', day: 'numeric' };
+
+    if (!e) return s.toLocaleDateString('en-US', opts);
+    return `${s.toLocaleDateString('en-US', opts)} - ${e.toLocaleDateString('en-US', opts)}`;
+  }
+  const dateRange = formatDateRange(activeTrip.startAt || activeTrip.startDate, activeTrip.endAt || activeTrip.endDate);
+
   return `
     <div class="trip-switcher">
-      <button class="trip-switcher-btn" id="trip-switcher-toggle">
+      <button class="trip-switcher-btn" data-action="toggle" aria-expanded="false">
         <span class="trip-switcher-icon">${getTripIcon(activeTrip.destination)}</span>
-        <span class="trip-switcher-name">${activeTrip.name}</span>
+        <div class="trip-switcher-info">
+          <span class="trip-switcher-name">${activeTrip.name}</span>
+          <span class="trip-switcher-dates">${dateRange}</span>
+        </div>
         <span class="trip-switcher-arrow">▼</span>
       </button>
-      <div class="trip-switcher-dropdown hidden" id="trip-switcher-dropdown">
+      <div class="trip-switcher-dropdown hidden" data-role="dropdown">
         ${trips.map(trip => `
           <button class="trip-switcher-option ${trip.id === activeTrip.id ? 'active' : ''}" data-trip-id="${trip.id}">
             <span>${getTripIcon(trip.destination)}</span>
@@ -188,13 +221,69 @@ export function renderTripSwitcher(store) {
           </button>
         `).join('')}
         <div class="trip-switcher-divider"></div>
-        <button class="trip-switcher-option" id="go-to-all-trips">
+        <button class="trip-switcher-option" data-action="settings">
+          <span>⚙️</span>
+          <span>Trip Settings</span>
+        </button>
+        <button class="trip-switcher-option" data-action="all-trips">
           <span>⬅</span>
           <span>All Trips</span>
         </button>
       </div>
     </div>
   `;
+}
+
+export function bindTripSwitcherEvents(container, store, callbacks = {}) {
+  // callbacks: { onTripSelect, onSettings, onAllTrips }
+  // onTripSelect(tripId)
+
+  const toggleBtn = container.querySelector('[data-action="toggle"]');
+  const dropdown = container.querySelector('[data-role="dropdown"]');
+  const tripOptions = container.querySelectorAll('.trip-switcher-option[data-trip-id]');
+  const settingsBtn = container.querySelector('[data-action="settings"]');
+  const allTripsBtn = container.querySelector('[data-action="all-trips"]');
+
+  if (toggleBtn && dropdown) {
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdown.classList.toggle('hidden');
+      toggleBtn.setAttribute('aria-expanded', !dropdown.classList.contains('hidden'));
+    });
+
+    // Close on outside click is harder if we have multiple.
+    // We'll rely on global closer or just close on selection.
+    document.addEventListener('click', (e) => {
+      if (!container.contains(e.target)) {
+        dropdown.classList.add('hidden');
+        toggleBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  tripOptions.forEach(option => {
+    option.addEventListener('click', () => {
+      const tripId = option.dataset.tripId;
+      dropdown?.classList.add('hidden');
+      if (callbacks.onTripSelect) callbacks.onTripSelect(tripId);
+      else store.setActiveTrip(tripId); // default behavior
+    });
+  });
+
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', () => {
+      dropdown?.classList.add('hidden');
+      if (callbacks.onSettings) callbacks.onSettings();
+    });
+  }
+
+  if (allTripsBtn) {
+    allTripsBtn.addEventListener('click', () => {
+      dropdown?.classList.add('hidden');
+      if (callbacks.onAllTrips) callbacks.onAllTrips();
+      else store.setActiveTrip(null); // default
+    });
+  }
 }
 
 export function renderSetPasswordModal() {
@@ -338,6 +427,97 @@ export function renderAccountSettings(user, archivedTrips = []) {
           </div>
         `}
       </div>
+    </div>
+  `;
+}
+
+/**
+ * Render item type picker for calendar drag-create
+ * Shows buttons for each item type so user can choose what to add
+ */
+export function renderAddItemPicker(dateData) {
+  const date = dateData.date;
+  const startTime = dateData.startTime || '09:00';
+  const endTime = dateData.endTime || '10:00';
+
+  const formatDate = (d) => {
+    return new Date(d + 'T12:00:00').toLocaleDateString('en-US', {
+      weekday: 'long', month: 'short', day: 'numeric'
+    });
+  };
+
+  return `
+    <div class="add-item-picker">
+      <h2>➕ Add New Item</h2>
+      <p class="text-secondary" style="margin-bottom: 1.5rem;">
+        ${formatDate(date)} • ${startTime} – ${endTime}
+      </p>
+      
+      <div class="item-type-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <button class="item-type-btn" data-type="activity" style="
+          display: flex; flex-direction: column; align-items: center; gap: 8px;
+          padding: 20px; border: 3px solid var(--border-color, #2c3e50); border-radius: 12px;
+          background: white; cursor: pointer; transition: all 0.2s;
+        ">
+          <span style="font-size: 2rem;">📍</span>
+          <span style="font-weight: 600;">Activity</span>
+          <span style="font-size: 0.75rem; color: #666;">Sightseeing, tours, events</span>
+        </button>
+        
+        <button class="item-type-btn" data-type="stay" style="
+          display: flex; flex-direction: column; align-items: center; gap: 8px;
+          padding: 20px; border: 3px solid var(--border-color, #2c3e50); border-radius: 12px;
+          background: white; cursor: pointer; transition: all 0.2s;
+        ">
+          <span style="font-size: 2rem;">🏨</span>
+          <span style="font-weight: 600;">Stay</span>
+          <span style="font-size: 0.75rem; color: #666;">Hotels, Airbnb, hostels</span>
+        </button>
+        
+        <button class="item-type-btn" data-type="transit" style="
+          display: flex; flex-direction: column; align-items: center; gap: 8px;
+          padding: 20px; border: 3px solid var(--border-color, #2c3e50); border-radius: 12px;
+          background: white; cursor: pointer; transition: all 0.2s;
+        ">
+          <span style="font-size: 2rem;">🚃</span>
+          <span style="font-weight: 600;">Transit</span>
+          <span style="font-size: 0.75rem; color: #666;">Trains, buses, rideshares</span>
+        </button>
+        
+        <button class="item-type-btn" data-type="flight" style="
+          display: flex; flex-direction: column; align-items: center; gap: 8px;
+          padding: 20px; border: 3px solid var(--border-color, #2c3e50); border-radius: 12px;
+          background: white; cursor: pointer; transition: all 0.2s;
+        ">
+          <span style="font-size: 2rem;">✈️</span>
+          <span style="font-weight: 600;">Flight</span>
+          <span style="font-size: 0.75rem; color: #666;">Air travel</span>
+        </button>
+      </div>
+      
+      <button class="picker-cancel-btn" style="
+        margin-top: 1.5rem;
+        width: 100%;
+        padding: 12px;
+        border: 2px solid var(--border-color, #2c3e50);
+        border-radius: 8px;
+        background: transparent;
+        cursor: pointer;
+        font-weight: 600;
+        color: var(--text-secondary, #666);
+        transition: all 0.2s;
+      ">✕ Cancel</button>
+      
+      <style>
+        .item-type-btn:hover {
+          background: var(--cream, #f8f4eb) !important;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .picker-cancel-btn:hover {
+          background: var(--cream, #f8f4eb);
+        }
+      </style>
     </div>
   `;
 }

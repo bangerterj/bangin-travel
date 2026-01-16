@@ -11,7 +11,7 @@ import { renderStays, renderStayForm } from './components/stays.js';
 import { renderTransit, renderTransitForm } from './components/transit.js';
 import { renderActivities, renderActivityForm } from './components/activities.js';
 import { renderLedger } from './components/ledger.js';
-import { renderTripSelector, renderTripSetupForm, renderTripSwitcher, renderSetPasswordModal, renderInviteModal, renderTripEditForm, renderAccountSettings } from './components/trips.js';
+import { renderTripSelector, renderTripSetupForm, renderTripSwitcher, bindTripSwitcherEvents, renderSetPasswordModal, renderInviteModal, renderTripEditForm, renderAccountSettings, renderAddItemPicker } from './components/trips.js';
 import { setupAutocomplete } from './components/autocomplete.js';
 import { TripService } from './services/TripService.js';
 
@@ -36,7 +36,7 @@ class App {
         this.tripsContainer = document.getElementById('trips-container');
         this.tripSwitcherContainer = document.getElementById('trip-switcher-container');
         this.tabPanes = {
-            summary: document.getElementById('tab-summary'),
+            map: document.getElementById('tab-map'),
             calendar: document.getElementById('tab-calendar'),
             flights: document.getElementById('tab-flights'),
             stays: document.getElementById('tab-stays'),
@@ -111,6 +111,10 @@ class App {
                 this.render();
             });
         }
+
+        // Mobile Navigation Drawer
+        this.setupMobileDrawer();
+
         // Close dropdown when clicking outside
         document.addEventListener('click', (e) => {
             const dropdown = document.getElementById('trip-switcher-dropdown');
@@ -118,6 +122,56 @@ class App {
             if (dropdown && !dropdown.contains(e.target) && e.target !== toggle && !toggle?.contains(e.target)) {
                 dropdown.classList.add('hidden');
             }
+        });
+    }
+
+    setupMobileDrawer() {
+        const hamburger = document.getElementById('hamburger-btn');
+        const drawer = document.getElementById('mobile-drawer');
+        const overlay = document.getElementById('drawer-overlay');
+
+        if (!hamburger || !drawer || !overlay) return;
+
+        const openDrawer = () => {
+            drawer.classList.add('open');
+            overlay.classList.add('open');
+            document.body.style.overflow = 'hidden';
+        };
+
+        const closeDrawer = () => {
+            drawer.classList.remove('open');
+            overlay.classList.remove('open');
+            document.body.style.overflow = '';
+        };
+
+        hamburger.addEventListener('click', openDrawer);
+        overlay.addEventListener('click', closeDrawer);
+
+        // Drawer nav items
+        drawer.querySelectorAll('.drawer-nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const tab = item.dataset.tab;
+                if (tab) {
+                    closeDrawer();
+                    this.switchTab(tab);
+                    // Update active state
+                    drawer.querySelectorAll('.drawer-nav-item').forEach(i => i.classList.remove('active'));
+                    item.classList.add('active');
+                }
+            });
+        });
+
+        // Logout button
+        document.getElementById('drawer-logout')?.addEventListener('click', () => {
+            closeDrawer();
+            window.location.href = '/api/auth/signout';
+        });
+
+        // Settings button
+        document.getElementById('drawer-settings')?.addEventListener('click', () => {
+            closeDrawer();
+            this.openModal(renderAccountSettings(store.getSession()?.user, store.getTrips().filter(t => t.isArchived)));
+            this.bindAccountSettingsForm();
         });
     }
 
@@ -394,6 +448,11 @@ class App {
             this.showView('dashboard');
             this.renderHeaderProfile();
 
+            // Migration: Rename 'summary' tab to 'map'
+            if (store.data.config.activeTab === 'summary') {
+                store.data.config.activeTab = 'map';
+            }
+
             this.renderTabs();
             this.renderTabContent();
             this.updateTripSwitcher();
@@ -415,21 +474,32 @@ class App {
     }
 
     renderHeaderProfile() {
+        // Update Desktop Header
         const container = document.getElementById('header-right');
         const session = store.getSession();
-        if (!container || !session) return;
+        if (!session) return;
 
-        container.innerHTML = `
-            <button class="account-btn" id="header-account-btn" title="Account Settings">
-                <span>👤</span>
-                <span>${session.user.name || 'Account'}</span>
-            </button>
-        `;
+        if (container) {
+            container.innerHTML = `
+                <button class="account-btn" id="header-account-btn" title="Account Settings">
+                    <span>👤</span>
+                    <span>${session.user.name || 'Account'}</span>
+                </button>
+            `;
+            const headerBtn = document.getElementById('header-account-btn');
+            headerBtn?.addEventListener('click', () => this.handleAccountSettings());
+        }
 
-        document.getElementById('header-account-btn')?.addEventListener('click', () => {
-            this.handleAccountSettings();
-        });
+        // Update Mobile Drawer
+        const drawerName = document.getElementById('drawer-user-name');
+        const drawerEmail = document.getElementById('drawer-user-email');
+        const drawerAvatar = document.querySelector('.drawer-avatar');
+
+        if (drawerName) drawerName.textContent = session.user.name || 'Traveler';
+        if (drawerEmail) drawerEmail.textContent = session.user.email || '';
+        if (drawerAvatar) drawerAvatar.textContent = (session.user.name || 'T').charAt(0).toUpperCase();
     }
+
 
     async handleUpdateName(e) {
         e.preventDefault();
@@ -552,15 +622,28 @@ class App {
                 onAdd: (type) => this.openEntityModal(type, null),
                 onEdit: (type, item) => this.openEntityModal(type, item),
                 onInvite: () => this.handleInvite(),
-                onEditTrip: () => this.handleTripEdit()
+                onEditTrip: () => this.handleTripEdit(),
+                onTripSelect: (id) => this.handleTripSelect(id),
+                onAllTrips: () => {
+                    store.setActiveTrip(null);
+                    this.render();
+                }
             };
 
             switch (activeTab) {
-                case 'summary':
+                case 'map':
                     renderSummary(activePane, store, callbacks);
                     break;
                 case 'calendar':
-                    renderCalendar(activePane, store);
+                    renderCalendar(activePane, store, (type, data, mode) => {
+                        if (mode === 'edit') {
+                            // Editing existing item - open form directly
+                            this.openEntityModal(type === 'activity' ? 'activities' : type + 's', data);
+                        } else {
+                            // Creating new item - show type picker first
+                            this.handleAddItemFromCalendar(data);
+                        }
+                    });
                     break;
                 case 'flights':
                     renderFlights(activePane, store, callbacks);
@@ -590,34 +673,17 @@ class App {
 
             container.innerHTML = renderTripSwitcher(store);
 
-            // Bind events after rendering
-            const toggleBtn = document.getElementById('trip-switcher-toggle');
-            const dropdown = document.getElementById('trip-switcher-dropdown');
-            const tripOptions = document.querySelectorAll('.trip-switcher-option[data-trip-id]');
-            const goToAllTrips = document.getElementById('go-to-all-trips');
-
-            if (toggleBtn && dropdown) {
-                toggleBtn.addEventListener('click', () => {
-                    dropdown.classList.toggle('hidden');
-                });
-            }
-
-            tripOptions.forEach(option => {
-                option.addEventListener('click', () => {
-                    const tripId = option.dataset.tripId;
-                    store.setActiveTrip(tripId);
-                    dropdown?.classList.add('hidden');
+            bindTripSwitcherEvents(container, store, {
+                onTripSelect: (id) => {
+                    store.setActiveTrip(id);
                     this.render();
-                });
-            });
-
-            if (goToAllTrips) {
-                goToAllTrips.addEventListener('click', () => {
+                },
+                onSettings: () => this.handleTripEdit(),
+                onAllTrips: () => {
                     store.setActiveTrip(null);
-                    dropdown?.classList.add('hidden');
                     this.render();
-                });
-            }
+                }
+            });
         }
     }
 
@@ -647,17 +713,45 @@ class App {
         const cancelBtn = document.getElementById('cancel-trip-btn');
         const errorEl = document.getElementById('trip-form-error');
 
+        // Setup Autocomplete for Destination
+        const destInput = document.getElementById('trip-destination');
+
+        // Give it a name so hidden inputs are named 'destination.coordinates.lat/lng'
+        if (destInput) {
+            destInput.name = 'destination';
+            this.setupLocationAutocomplete(destInput, true, (item) => {
+                // Future: heuristics for timezone adjustment?
+                // For now, relies on user to set Timezone manually if needed.
+            });
+        }
+
         cancelBtn?.addEventListener('click', () => this.closeModal());
 
         form?.addEventListener('submit', async (e) => {
             e.preventDefault();
 
+            // Extract coordinates from the hidden inputs created by autocomplete
+            const latInput = form.querySelector('input[name="destination.coordinates.lat"]');
+            const lngInput = form.querySelector('input[name="destination.coordinates.lng"]');
+
+            const coordinates = (latInput && lngInput && latInput.value && lngInput.value)
+                ? { lat: parseFloat(latInput.value), lng: parseFloat(lngInput.value) }
+                : null;
+
             const newTrip = {
                 name: document.getElementById('trip-name').value,
-                destination: document.getElementById('trip-destination').value,
+                destination: destInput.value,
                 startDate: document.getElementById('trip-start-date').value,
-                endDate: document.getElementById('trip-end-date').value
+                endDate: document.getElementById('trip-end-date').value,
+                timezone: document.getElementById('trip-timezone').value, // Capture timezone
+                location: {
+                    displayName: destInput.value,
+                    coordinates: coordinates
+                }
             };
+            // Also update root-level destination text for compatibility
+
+            // If we have coordinates but no explicit timezone, we could try to guess logic here, but we rely on dropdown.
 
             const submitBtn = form.querySelector('button[type="submit"]');
             submitBtn.disabled = true;
@@ -669,6 +763,7 @@ class App {
                 this.render();
                 this.showToast('✅ Trip created successfully!');
             } catch (err) {
+                console.error(err);
                 errorEl.textContent = 'Failed to create trip. Please try again.';
                 errorEl.classList.remove('hidden');
                 submitBtn.disabled = false;
@@ -698,9 +793,160 @@ class App {
         this.bindEntityForm(type, item);
     }
 
+    handleAddItemFromCalendar(dateData) {
+        // Store the date data for later use
+        this.pendingDateData = dateData;
+
+        // Show the type picker modal
+        this.openModal(renderAddItemPicker(dateData));
+
+        // Bind type button clicks
+        document.querySelectorAll('.item-type-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const selectedType = btn.dataset.type;
+                this.closeModal(true); // Force close without confirmation
+
+                // Map type to plural form used by openEntityModal
+                const typeMap = {
+                    'activity': 'activities',
+                    'stay': 'stays',
+                    'transit': 'transit',
+                    'flight': 'flights'
+                };
+
+                // Open the appropriate form
+                // Use pendingDateData as initial item state to pre-fill date/time
+                this.openEntityModal(typeMap[selectedType], this.pendingDateData || null);
+            });
+        });
+
+        // Clear pending data on mode switch or cancel? 
+        // We can leave it, it gets overwritten on next drag.
+
+        // Bind cancel button
+        const cancelBtn = document.querySelector('.picker-cancel-btn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                this.closeModal(true);
+            });
+        }
+    }
+
+    setupLocationAutocomplete(inputEl, addHiddenCoords = true, onSelect = null) {
+        if (!inputEl) return;
+
+        // Setup inline autocomplete for location fields
+        // Check if wrapper already exists
+        if (inputEl.parentNode.classList.contains('autocomplete-wrapper')) return;
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'autocomplete-wrapper';
+        wrapper.style.position = 'relative';
+        inputEl.parentNode.insertBefore(wrapper, inputEl);
+        wrapper.appendChild(inputEl);
+
+        let latInput, lngInput;
+
+        if (addHiddenCoords) {
+            // Add hidden fields for coordinates
+            latInput = document.createElement('input');
+            latInput.type = 'hidden';
+            latInput.name = inputEl.name ? `${inputEl.name}.coordinates.lat` : 'location.coordinates.lat';
+            wrapper.appendChild(latInput);
+
+            lngInput = document.createElement('input');
+            lngInput.type = 'hidden';
+            lngInput.name = inputEl.name ? `${inputEl.name}.coordinates.lng` : 'location.coordinates.lng';
+            wrapper.appendChild(lngInput);
+        }
+
+        // Create dropdown
+        const dropdown = document.createElement('div');
+        dropdown.className = 'loc-dropdown';
+        dropdown.style.cssText = `
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 2px solid #2c3e50;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        `;
+        wrapper.appendChild(dropdown);
+
+        let debounceTimer = null;
+
+        const searchLocation = async (query) => {
+            if (!query || query.length < 2) return [];
+            // fetching addressdetails=1. We might want extratags=1 later for timezone.
+            const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1`;
+            try {
+                const res = await fetch(url, { headers: { 'User-Agent': 'BanginTravel/1.0' } });
+                const data = await res.json();
+                return data.map(item => ({
+                    displayName: item.display_name.split(',').slice(0, 3).join(', '),
+                    lat: parseFloat(item.lat),
+                    lng: parseFloat(item.lon),
+                    raw: item
+                }));
+            } catch (e) { return []; }
+        };
+
+        inputEl.addEventListener('input', (e) => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            if (e.target.value.length < 2) { dropdown.style.display = 'none'; return; }
+
+            debounceTimer = setTimeout(async () => {
+                const results = await searchLocation(e.target.value);
+                if (results.length === 0) { dropdown.style.display = 'none'; return; }
+
+                dropdown.innerHTML = results.map((r, i) => `
+                    <div class="loc-item" data-idx="${i}" style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee;">
+                        📍 ${r.displayName}
+                    </div>
+                `).join('');
+                dropdown.style.display = 'block';
+
+                dropdown.querySelectorAll('.loc-item').forEach(el => {
+                    el.addEventListener('mouseenter', () => el.style.background = '#f5f5f5');
+                    el.addEventListener('mouseleave', () => el.style.background = 'white');
+                    el.addEventListener('mousedown', (ev) => {
+                        ev.preventDefault();
+                        const r = results[el.dataset.idx];
+                        inputEl.value = r.displayName;
+
+                        // Set hidden inputs contextually
+                        if (addHiddenCoords) {
+                            // If names were generated based on input name
+                            if (latInput) latInput.value = r.lat;
+                            if (lngInput) lngInput.value = r.lng;
+
+                            // Also try to set named hidden inputs if they exist (legacy support for fixed names)
+                            // But cleaner is to rely on the ones we created.
+                        }
+
+                        dropdown.style.display = 'none';
+                        this.modalHasChanges = true;
+                        if (onSelect) onSelect(r);
+                    });
+                });
+            }, 300);
+        });
+
+        inputEl.addEventListener('blur', () => setTimeout(() => dropdown.style.display = 'none', 200));
+    }
+
     bindEntityForm(type, item) {
         console.log('[TRACE] bindEntityForm START:', type);
         const form = document.getElementById(`${type}-form`);
+        // ... (rest of bindEntityForm code) ...
+
         console.log('[TRACE] Form element:', form);
         const deleteBtn = document.getElementById('delete-btn');
 
@@ -770,6 +1016,7 @@ class App {
             setupAutocomplete(depInput, searchAirports, renderAirportItem, onSelectAirport);
             setupAutocomplete(arrInput, searchAirports, renderAirportItem, onSelectAirport);
 
+            // ... (Duration Calculation Code) ...
             // Duration Calculation
             const calculateDuration = async () => {
                 const depIata = depInput?.value;
@@ -799,7 +1046,21 @@ class App {
                 }
             };
 
-            // Bind calculation to changes
+            // Attach to fields using class method
+            const addressInput = form.querySelector('input[name="address"]');
+            const locationInput = form.querySelector('input[name="location"]');
+            const depLocInput = form.querySelector('input[name="departureLocation"]');
+            const arrLocInput = form.querySelector('input[name="arrivalLocation"]');
+
+            if (addressInput) {
+                // Special handling for Stays: we want to populate 'address' input but also ensure hidden fields
+                this.setupLocationAutocomplete(addressInput, true);
+            }
+            if (locationInput) this.setupLocationAutocomplete(locationInput, true);
+
+            // For Transit, we don't save coordinates yet in the schema, just text
+            if (depLocInput) this.setupLocationAutocomplete(depLocInput, false);
+            if (arrLocInput) this.setupLocationAutocomplete(arrLocInput, false);
             [depInput, arrInput, depTimeInput, arrTimeInput].forEach(el => {
                 if (el) el.addEventListener('blur', calculateDuration);
             });
@@ -811,6 +1072,115 @@ class App {
                 }
             }
         }
+
+        // LOCATION AUTOCOMPLETE HELPER
+        const setupLocAutocomplete = (inputEl, addHiddenCoords = true) => {
+            if (!inputEl) return;
+
+            // Setup inline autocomplete for location fields
+            const wrapper = document.createElement('div');
+            wrapper.style.position = 'relative';
+            inputEl.parentNode.insertBefore(wrapper, inputEl);
+            wrapper.appendChild(inputEl);
+
+            let latInput, lngInput;
+
+            if (addHiddenCoords) {
+                // Add hidden fields for coordinates
+                latInput = document.createElement('input');
+                latInput.type = 'hidden';
+                latInput.name = 'location.coordinates.lat';
+                wrapper.appendChild(latInput);
+
+                lngInput = document.createElement('input');
+                lngInput.type = 'hidden';
+                lngInput.name = 'location.coordinates.lng';
+                wrapper.appendChild(lngInput);
+            }
+
+            // Create dropdown
+            const dropdown = document.createElement('div');
+            dropdown.className = 'loc-dropdown';
+            dropdown.style.cssText = `
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                background: white;
+                border: 2px solid #2c3e50;
+                border-top: none;
+                border-radius: 0 0 8px 8px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                z-index: 1000;
+                max-height: 200px;
+                overflow-y: auto;
+                display: none;
+            `;
+            wrapper.appendChild(dropdown);
+
+            let debounceTimer = null;
+            let results = [];
+
+            const searchLocation = async (query) => {
+                if (!query || query.length < 2) return [];
+                const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1`;
+                try {
+                    const res = await fetch(url, { headers: { 'User-Agent': 'BanginTravel/1.0' } });
+                    const data = await res.json();
+                    return data.map(item => ({
+                        displayName: item.display_name.split(',').slice(0, 3).join(', '),
+                        lat: parseFloat(item.lat),
+                        lng: parseFloat(item.lon)
+                    }));
+                } catch (e) { return []; }
+            };
+
+            inputEl.addEventListener('input', (e) => {
+                if (debounceTimer) clearTimeout(debounceTimer);
+                if (e.target.value.length < 2) { dropdown.style.display = 'none'; return; }
+
+                debounceTimer = setTimeout(async () => {
+                    results = await searchLocation(e.target.value);
+                    if (results.length === 0) { dropdown.style.display = 'none'; return; }
+
+                    dropdown.innerHTML = results.map((r, i) => `
+                        <div class="loc-item" data-idx="${i}" style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee;">
+                            📍 ${r.displayName}
+                        </div>
+                    `).join('');
+                    dropdown.style.display = 'block';
+
+                    dropdown.querySelectorAll('.loc-item').forEach(el => {
+                        el.addEventListener('mouseenter', () => el.style.background = '#f5f5f5');
+                        el.addEventListener('mouseleave', () => el.style.background = 'white');
+                        el.addEventListener('mousedown', (ev) => {
+                            ev.preventDefault();
+                            const r = results[el.dataset.idx];
+                            inputEl.value = r.displayName;
+                            if (latInput) latInput.value = r.lat;
+                            if (lngInput) lngInput.value = r.lng;
+                            dropdown.style.display = 'none';
+                            this.modalHasChanges = true;
+                        });
+                    });
+                }, 300);
+            });
+
+            inputEl.addEventListener('blur', () => setTimeout(() => dropdown.style.display = 'none', 200));
+        };
+
+        // Attach to fields
+        const addressInput = form.querySelector('input[name="address"]');
+        const locationInput = form.querySelector('input[name="location"]');
+        const depLocInput = form.querySelector('input[name="departureLocation"]');
+        const arrLocInput = form.querySelector('input[name="arrivalLocation"]');
+
+        if (addressInput) setupLocAutocomplete(addressInput, true);
+        if (locationInput) setupLocAutocomplete(locationInput, true);
+
+        // For Transit, we don't save coordinates yet in the schema, just text
+        if (depLocInput) setupLocAutocomplete(depLocInput, false);
+        if (arrLocInput) setupLocAutocomplete(arrLocInput, false);
 
 
         // Duplicate logic removed from here (moved to top of function)
@@ -839,6 +1209,21 @@ class App {
                     const metadata = baseMetadata;
                     if (data.address) metadata.address = data.address;
                     if (data.type) metadata.type = data.type; // e.g. hotel/airbnb
+
+                    // Location coordinates from autocomplete hidden fields
+                    const lat = data['location.coordinates.lat'];
+                    const lng = data['location.coordinates.lng'];
+                    if (lat && lng) {
+                        metadata.location = {
+                            displayName: data.address || data.location || '',
+                            coordinates: {
+                                lat: parseFloat(lat),
+                                lng: parseFloat(lng)
+                            }
+                        };
+                    }
+                    delete data['location.coordinates.lat'];
+                    delete data['location.coordinates.lng'];
 
                     // Cost structure
                     if (data['cost.amount'] !== undefined) {
