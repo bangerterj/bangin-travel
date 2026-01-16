@@ -24,8 +24,8 @@ export function renderSummary(container, store, callbacks) {
       id: s.id,
       type: 'stay',
       title: s.name || s.title,
-      location: s.metadata?.location || (s.coordinates ? { displayName: s.address, coordinates: s.coordinates } : null),
-      coordinates: s.coordinates || s.metadata?.location?.coordinates,
+      location: s.location || s.metadata?.location || (s.coordinates ? { displayName: s.address, coordinates: s.coordinates } : null),
+      coordinates: s.location?.coordinates || s.metadata?.location?.coordinates || s.coordinates,
       startTime: s.startAt || s.checkIn,
       endTime: s.endAt || s.checkOut,
       data: s
@@ -34,8 +34,8 @@ export function renderSummary(container, store, callbacks) {
       id: a.id,
       type: 'activity',
       title: a.name || a.title,
-      location: a.metadata?.location || (a.coordinates ? { displayName: a.location, coordinates: a.coordinates } : null),
-      coordinates: a.coordinates || a.metadata?.location?.coordinates,
+      location: a.location || a.metadata?.location || (a.coordinates ? { displayName: a.location, coordinates: a.coordinates } : null),
+      coordinates: a.location?.coordinates || a.metadata?.location?.coordinates || a.coordinates,
       startTime: a.startAt || a.startTime,
       endTime: a.endAt || a.endTime,
       data: a
@@ -44,8 +44,8 @@ export function renderSummary(container, store, callbacks) {
       id: t.id,
       type: 'transit',
       title: t.title || t.name,
-      location: t.metadata?.location || (t.coordinates ? { displayName: '', coordinates: t.coordinates } : null),
-      coordinates: t.coordinates || t.metadata?.location?.coordinates,
+      location: t.location || t.metadata?.location || (t.coordinates ? { displayName: '', coordinates: t.coordinates } : null),
+      coordinates: t.location?.coordinates || t.metadata?.location?.coordinates || t.coordinates,
       startTime: t.startAt || t.departureTime,
       endTime: t.endAt || t.arrivalTime,
       data: t
@@ -125,9 +125,8 @@ export function renderSummary(container, store, callbacks) {
       </div>
   `;
 
-  // Initialize Map
-
-  initMapView(allMapEvents);
+  // Initialize Map (pass trip for fallback location)
+  initMapView(allMapEvents, trip);
 
   const switcherContainer = container.querySelector('#map-trip-switcher');
   if (switcherContainer) {
@@ -151,7 +150,7 @@ export function renderSummary(container, store, callbacks) {
   }
 }
 
-function initMapView(events) {
+function initMapView(events, trip) {
   const mapContainer = document.getElementById('trip-map-react-root');
   if (!mapContainer) return;
 
@@ -175,27 +174,34 @@ function initMapView(events) {
     if (!document.querySelector('script[src*="leaflet"]')) {
       const script = document.createElement('script');
       script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = () => renderMap(mapContainer, events);
+      script.onload = () => renderMap(mapContainer, events, trip);
       document.body.appendChild(script);
     } else {
       const check = setInterval(() => {
         if (window.L) {
           clearInterval(check);
-          renderMap(mapContainer, events);
+          renderMap(mapContainer, events, trip);
         }
       }, 100);
     }
   } else {
-    renderMap(mapContainer, events);
+    renderMap(mapContainer, events, trip);
   }
 }
 
-function renderMap(container, events) {
+function renderMap(container, events, trip) {
   container.innerHTML = '';
   const L = window.L;
+
+  // Use trip location as fallback, or default to Tokyo
+  const tripCoords = trip?.location?.coordinates;
+  const defaultCenter = tripCoords
+    ? [tripCoords.lat, tripCoords.lng]
+    : [35.6762, 139.6503];
+
   const map = L.map(container, {
-    zoomControl: false // We can add custom controls if needed
-  }).setView([35.6762, 139.6503], 13); // Default to Tokyo if no events
+    zoomControl: false
+  }).setView(defaultCenter, 12);
 
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; CARTO',
@@ -270,7 +276,7 @@ function renderMap(container, events) {
   });
 
   if (bounds.length > 0) {
-    map.fitBounds(bounds, { padding: [50, 50] });
+    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
   }
 }
 

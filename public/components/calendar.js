@@ -382,14 +382,18 @@ export function renderCalendar(container, store, openModal) {
       });
     });
 
-    // Drag-to-create on day columns
+    // Drag-to-create on day columns (mouse + touch)
     document.querySelectorAll('.day-column').forEach(column => {
       let isDragging = false;
       let startY = 0;
       let currentY = 0;
       let dragIndicator = null;
+      let longPressTimer = null;
+      let touchStartX = 0;
+      let touchStartY = 0;
 
       const HEADER_HEIGHT = 52; // Height of sticky day header
+      const LONG_PRESS_DURATION = 500; // ms
 
       const getTimeFromY = (y, rect) => {
         const relY = y - rect.top - HEADER_HEIGHT;
@@ -398,17 +402,10 @@ export function renderCalendar(container, store, openModal) {
         return { hour: Math.max(0, Math.min(23, hour)), minutes };
       };
 
-      column.addEventListener('mousedown', (e) => {
-        if (e.target.closest('.timeline-item')) return; // Don't drag on items
-
-        isDragging = true;
-        const rect = column.getBoundingClientRect();
-        startY = e.clientY;
-
-        // Create drag indicator
-        dragIndicator = document.createElement('div');
-        dragIndicator.className = 'drag-indicator';
-        dragIndicator.style.cssText = `
+      const createDragIndicator = () => {
+        const indicator = document.createElement('div');
+        indicator.className = 'drag-indicator';
+        indicator.style.cssText = `
           position: absolute;
           left: 4px;
           right: 4px;
@@ -418,17 +415,28 @@ export function renderCalendar(container, store, openModal) {
           pointer-events: none;
           z-index: 15;
         `;
+        return indicator;
+      };
+
+      const startDrag = (clientY) => {
+        if (isDragging) return;
+        isDragging = true;
+        const rect = column.getBoundingClientRect();
+        startY = clientY;
+        currentY = clientY;
+
+        dragIndicator = createDragIndicator();
         column.appendChild(dragIndicator);
 
         const startTime = getTimeFromY(startY, rect);
         dragIndicator.style.top = `${startTime.hour * 60 + startTime.minutes + HEADER_HEIGHT}px`;
         dragIndicator.style.height = '30px';
-      });
+      };
 
-      column.addEventListener('mousemove', (e) => {
+      const updateDrag = (clientY) => {
         if (!isDragging || !dragIndicator) return;
 
-        currentY = e.clientY;
+        currentY = clientY;
         const rect = column.getBoundingClientRect();
 
         const startTime = getTimeFromY(startY, rect);
@@ -439,9 +447,9 @@ export function renderCalendar(container, store, openModal) {
 
         dragIndicator.style.top = `${startPx + HEADER_HEIGHT}px`;
         dragIndicator.style.height = `${Math.max(30, endPx - startPx)}px`;
-      });
+      };
 
-      const endDrag = (e) => {
+      const endDrag = () => {
         if (!isDragging) return;
         isDragging = false;
 
@@ -474,9 +482,128 @@ export function renderCalendar(container, store, openModal) {
         }
       };
 
+      const cancelLongPress = () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      };
+
+      // Mouse events
+      column.addEventListener('mousedown', (e) => {
+        if (e.target.closest('.timeline-item')) return;
+        startDrag(e.clientY);
+      });
+
+      column.addEventListener('mousemove', (e) => {
+        updateDrag(e.clientY);
+      });
+
       column.addEventListener('mouseup', endDrag);
       column.addEventListener('mouseleave', endDrag);
+
+      // Touch events
+      column.addEventListener('touchstart', (e) => {
+        if (e.target.closest('.timeline-item')) return;
+
+        const touch = e.touches[0];
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+
+        // Start long-press timer
+        longPressTimer = setTimeout(() => {
+          // Long press detected - create item at this position
+          const rect = column.getBoundingClientRect();
+          const time = getTimeFromY(touch.clientY, rect);
+          const date = column.dataset.date;
+
+          const formatTime = (t) => `${String(t.hour).padStart(2, '0')}:${String(t.minutes).padStart(2, '0')}`;
+          const endHour = time.hour + 1;
+
+          // Vibrate if supported (haptic feedback)
+          if (navigator.vibrate) {
+            navigator.vibrate(50);
+          }
+
+          if (openModal) {
+            openModal('activity', {
+              date: date,
+              startTime: formatTime(time),
+              endTime: formatTime({ hour: Math.min(23, endHour), minutes: time.minutes }),
+              isNew: true
+            }, 'create');
+          }
+
+          longPressTimer = null;
+        }, LONG_PRESS_DURATION);
+      }, { passive: true });
+
+      column.addEventListener('touchmove', (e) => {
+        const touch = e.touches[0];
+        const deltaX = Math.abs(touch.clientX - touchStartX);
+        const deltaY = Math.abs(touch.clientY - touchStartY);
+
+        // If moved more than 10px, cancel long-press and start drag
+        if (deltaX > 10 || deltaY > 10) {
+          cancelLongPress();
+
+          // Start drag if vertical movement is dominant
+          if (deltaY > deltaX && !isDragging) {
+            startDrag(touchStartY);
+          }
+
+          if (isDragging) {
+            updateDrag(touch.clientY);
+          }
+        }
+      }, { passive: true });
+
+      column.addEventListener('touchend', () => {
+        cancelLongPress();
+        endDrag();
+      });
+
+      column.addEventListener('touchcancel', () => {
+        cancelLongPress();
+        if (dragIndicator) {
+          dragIndicator.remove();
+          dragIndicator = null;
+        }
+        isDragging = false;
+      });
     });
+
+    // Swipe navigation on timeline wrapper
+    const timelineWrapper = document.querySelector('.timeline-wrapper');
+    if (timelineWrapper) {
+      let swipeStartX = 0;
+      let swipeStartY = 0;
+
+      timelineWrapper.addEventListener('touchstart', (e) => {
+        swipeStartX = e.touches[0].clientX;
+        swipeStartY = e.touches[0].clientY;
+      }, { passive: true });
+
+      timelineWrapper.addEventListener('touchend', (e) => {
+        if (!e.changedTouches[0]) return;
+
+        const deltaX = e.changedTouches[0].clientX - swipeStartX;
+        const deltaY = e.changedTouches[0].clientY - swipeStartY;
+
+        // Only trigger if horizontal swipe is dominant and significant
+        if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+          if (deltaX > 0) {
+            // Swipe right - go to previous week
+            weekOffset--;
+            render();
+          } else {
+            // Swipe left - go to next week
+            weekOffset++;
+            render();
+          }
+        }
+      });
+    }
   }
 
   render();
