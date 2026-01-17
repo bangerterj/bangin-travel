@@ -741,6 +741,7 @@ function DayColumn({ date, items, onDragCreate, onEditItem, onDaySelect, isFullW
                 borderRadius: '50%',
                 cursor: 'nwse-resize',
                 pointerEvents: 'auto',
+                touchAction: 'none', // Critical: Prevent browser gesture (pull-to-refresh) during resize
                 boxShadow: '0 0 2px white'
               }}
             />
@@ -758,6 +759,7 @@ function DayColumn({ date, items, onDragCreate, onEditItem, onDaySelect, isFullW
                 borderRadius: '50%',
                 cursor: 'nwse-resize',
                 pointerEvents: 'auto',
+                touchAction: 'none', // Critical: Prevent browser gesture (pull-to-refresh) during resize
                 boxShadow: '0 0 2px white'
               }}
             />
@@ -1374,7 +1376,7 @@ export default function TimelineSandbox() {
         
         /* Day Column - takes full width of grid cell */
         :global(.day-column) {
-          min-width: 0; /* Allow columns to shrink in grid */
+          min-width: 45px; /* Prevent collapse on very small screens in Week View */
           width: 100%; /* Take full grid cell width */
           border-right: 1px solid var(--cream, #f8f4eb);
           overflow: hidden;
@@ -1468,7 +1470,8 @@ export default function TimelineSandbox() {
         /* Day Slots */
         :global(.day-slots) {
           cursor: crosshair;
-          touch-action: pan-y; /* Allow vertical scroll, disable browser touch gestures like zoom/swipe-nav if needed, but we want scroll */
+          touch-action: pan-y; /* Allow vertical scroll */
+          overscroll-behavior-y: none; /* Prevent pull-to-refresh on the grid itself */
           user-select: none;
           background: var(--white, #fff);
         }
