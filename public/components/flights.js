@@ -12,19 +12,18 @@ export function renderFlights(container, store, callbacks) {
 
   const flightCards = flights && flights.length > 0 ? flights.map(flight => {
     return renderItemCard(flight, 'flight');
-  }).join('') : `<div class="empty-state">
-    <div style="font-size: 3rem; margin-bottom: 1rem;">✈️</div>
-    <p>No flights added yet.</p>
+  }).join('') : `<div class="empty-state" style="text-align: center; padding: 40px 0;">
+    <p style="color: var(--text-secondary);">No flights added yet.</p>
   </div>`;
 
   container.innerHTML = `
-    <div class="tab-header">
-      <div class="tab-title">
+    <div class="tab-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+      <div class="tab-title" style="display: flex; align-items: center; gap: 12px;">
         <span style="font-size: 1.5rem;">✈️</span>
-        <h2>Flights</h2>
+        <h2 style="margin: 0;">Flights</h2>
       </div>
       ${callbacks ? `
-        <button class="btn-primary" id="add-flight-btn">➕ Add Flight</button>
+        <button class="btn-primary-compact" id="add-flight-btn" title="Add Flight">➕</button>
       ` : ''}
     </div>
     ${flightCards}
@@ -46,6 +45,20 @@ export function renderFlights(container, store, callbacks) {
         callbacks.onAdd('flights');
       });
     }
+
+    // View Details on Card Click
+    container.querySelectorAll('.unified-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        // Prevent if clicking actions (though they usually stop prop)
+        if (e.target.closest('.btn-action') || e.target.closest('a')) return;
+
+        const id = card.dataset.id;
+        const flight = flights.find(f => f.id === id);
+        if (flight && callbacks.onView) {
+          callbacks.onView('flight', flight);
+        }
+      });
+    });
   }
 }
 
@@ -62,7 +75,20 @@ export function renderFlightForm(flight = null, store = null) {
     }
   }
 
-  const data = flight || {
+  const data = flight ? {
+    type: flight.type || 'departure',
+    airline: flight.airline || '',
+    flightNumber: flight.flightNumber || '',
+    departureAirport: flight.departureAirport || '',
+    arrivalAirport: flight.arrivalAirport || '',
+    departureTime: flight.isNew ? `${flight.date}T${flight.startTime}` : (flight.startAt || flight.departureTime),
+    arrivalTime: flight.isNew ? `${flight.date}T${flight.endTime}` : (flight.endAt || flight.arrivalTime),
+    duration: flight.duration || '',
+    notes: flight.notes || '',
+    travelers: flight.travelers || allTravelerIds,
+    cost: flight.cost || flight.metadata?.cost || { amount: '', currency: 'USD' },
+    paidBy: flight.paidBy || flight.cost?.paidBy || flight.metadata?.cost?.paidBy || ''
+  } : {
     type: 'departure',
     airline: '',
     flightNumber: '',
@@ -72,13 +98,19 @@ export function renderFlightForm(flight = null, store = null) {
     arrivalTime: '',
     duration: '',
     notes: '',
-    travelers: allTravelerIds, // Default to ALL travelers for new items
-    cost: '',
+    travelers: allTravelerIds,
+    cost: { amount: '', currency: 'USD' },
     paidBy: ''
   };
 
   const formatDateForInput = (dateStr, timezone) => {
     if (!dateStr) return '';
+    // If it's already in the correct format from pre-fill (YYYY-MM-DDTHH:mm), return it
+    // Expanded regex to catch likely valid inputs that just need to be passed through
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(dateStr) && !timezone) {
+      return dateStr.substring(0, 16);
+    }
+
     try {
       const date = new Date(dateStr);
       if (timezone) {
@@ -93,10 +125,14 @@ export function renderFlightForm(flight = null, store = null) {
         const map = parts.reduce((acc, p) => ({ ...acc, [p.type]: p.value }), {});
         return `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}`;
       }
-      // Fallback: use UTC slice if no timezone (as stored DB value is UTC)
+
+      // Fallback: If no timezone content, assume the string is the "Wall Clock" time we want.
+      // Avoid new Date() -> toISOString() roundtrip if possible as it shifts based on local vs UTC.
+      if (typeof dateStr === 'string') {
+        return dateStr.substring(0, 16);
+      }
       return date.toISOString().slice(0, 16);
     } catch (e) {
-      console.error('Date format error', e);
       return '';
     }
   };

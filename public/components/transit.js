@@ -12,19 +12,18 @@ export function renderTransit(container, store, callbacks) {
 
   const transitCards = transit && transit.length > 0 ? transit.map(item => {
     return renderItemCard(item, 'transit');
-  }).join('') : `<div class="empty-state">
-    <div style="font-size: 3rem; margin-bottom: 1rem;">🚆</div>
-    <p>No transit legs added yet.</p>
+  }).join('') : `<div class="empty-state" style="text-align: center; padding: 40px 0;">
+    <p style="color: var(--text-secondary);">No transit legs added yet.</p>
   </div>`;
 
   container.innerHTML = `
-    <div class="tab-header">
-      <div class="tab-title">
+    <div class="tab-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+      <div class="tab-title" style="display: flex; align-items: center; gap: 12px;">
         <span style="font-size: 1.5rem;">🚆</span>
-        <h2>Transit</h2>
+        <h2 style="margin: 0;">Transit</h2>
       </div>
       ${callbacks ? `
-        <button class="btn-primary" id="add-transit-btn">➕ Add Transit</button>
+        <button class="btn-primary-compact" id="add-transit-btn" title="Add Transit">➕</button>
       ` : ''}
     </div>
     ${transitCards}
@@ -45,6 +44,17 @@ export function renderTransit(container, store, callbacks) {
         callbacks.onAdd('transit');
       });
     }
+
+    // View Details on Card Click
+    container.querySelectorAll('.unified-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.btn-action') || e.target.closest('a')) return;
+        const item = transit.find(t => t.id === card.dataset.id);
+        if (item && callbacks.onView) {
+          callbacks.onView('transit', item);
+        }
+      });
+    });
   }
 }
 
@@ -52,7 +62,19 @@ export function renderTransitForm(transit = null) {
   const isEdit = !!transit;
   const allTravelerIds = window.store?.getActiveTrip()?.travelers.map(t => t.id) || [];
 
-  const data = transit || {
+  const data = transit ? {
+    type: transit.type || 'train',
+    name: transit.name || '',
+    route: transit.route || '',
+    departureLocation: transit.departureLocation || '',
+    arrivalLocation: transit.arrivalLocation || '',
+    departureTime: transit.isNew ? `${transit.date}T${transit.startTime}` : (transit.startAt || transit.departureTime || ''),
+    arrivalTime: transit.isNew ? `${transit.date}T${transit.endTime}` : (transit.endAt || transit.arrivalTime || ''),
+    cost: transit.cost || { amount: 0, currency: 'USD' },
+    notes: transit.notes || '',
+    travelers: transit.travelers || allTravelerIds,
+    paidBy: transit.paidBy || transit.cost?.paidBy || ''
+  } : {
     type: 'train',
     name: '',
     route: '',
@@ -60,42 +82,28 @@ export function renderTransitForm(transit = null) {
     arrivalLocation: '',
     departureTime: '',
     arrivalTime: '',
-    cost: { amount: 0, currency: 'JPY' },
+    cost: { amount: 0, currency: 'USD' },
     notes: '',
     travelers: allTravelerIds,
-    paidBy: transit?.paidBy || ''
+    paidBy: ''
   };
 
   /* Robust Date Formatter using Trip Timezone */
   const formatDateForInput = (dateStr) => {
     if (!dateStr) return '';
-    const trip = window.store?.getActiveTrip();
-    const timezone = trip?.timezone || 'UTC'; // Fallback to UTC if no trip TZ
+    // If it's already in the correct format from pre-fill (YYYY-MM-DDTHH:mm), return it
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dateStr)) return dateStr;
 
+    const trip = window.store?.getActiveTrip();
+    const timezone = trip?.timezone || 'UTC';
     try {
-      // Parse string to Date (UTC)
       const date = new Date(dateStr);
       if (isNaN(date.getTime())) return '';
-
-      // Format to keys using the Target Timezone
-      const fmt = new Intl.DateTimeFormat('en-CA', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-        timeZone: timezone
-      });
-
-      // parts: year, month, day, hour, minute, literal...
+      const fmt = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: timezone });
       const parts = fmt.formatToParts(date);
       const getPart = (type) => parts.find(p => p.type === type)?.value;
-
-      // Construct YYYY-MM-DDTHH:MM
       return `${getPart('year')}-${getPart('month')}-${getPart('day')}T${getPart('hour')}:${getPart('minute')}`;
     } catch (e) {
-      console.error('Date format error', e);
       return dateStr ? new Date(dateStr).toISOString().slice(0, 16) : '';
     }
   };

@@ -68,7 +68,7 @@ export function renderSummary(container, store, callbacks) {
       endTime: f.endAt || f.arrivalTime,
       data: f
     }))
-  ].filter(e => e.coordinates);
+  ].filter(e => e.coordinates || (typeof e.location === 'string' && e.location) || e.location?.displayName);
 
   // Render Full Screen Map Structure
   container.innerHTML = `
@@ -125,9 +125,7 @@ export function renderSummary(container, store, callbacks) {
       </div>
   `;
 
-  // Initialize Map (pass trip for fallback location)
-  initMapView(allMapEvents, trip);
-
+  // Trip Switcher Logic
   const switcherContainer = container.querySelector('#map-trip-switcher');
   if (switcherContainer) {
     switcherContainer.innerHTML = renderTripSwitcher(store);
@@ -138,19 +136,74 @@ export function renderSummary(container, store, callbacks) {
     });
   }
 
-
-
   // Bind Global Close
   const closeBtn = container.querySelector('#close-detail-card');
   const card = container.querySelector('#map-detail-card');
+  const content = container.querySelector('#detail-card-content');
+
+  const hideCard = () => {
+    if (card) card.style.transform = 'translateY(110%)';
+  };
+
   if (closeBtn && card) {
-    closeBtn.addEventListener('click', () => {
-      card.style.transform = 'translateY(110%)';
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); // prevent triggering card click
+      hideCard();
     });
   }
+
+  // Show Card Logic
+  const showCard = (event) => {
+    if (!card || !content) return;
+
+    const { data: item, type } = event;
+    const timeStr = item.startTime ? new Date(item.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+    const dateStr = item.startTime ? new Date(item.startTime).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
+
+    // Mini Card Content
+    content.innerHTML = `
+      <div class="mini-card-preview" style="display: flex; gap: 16px; align-items: center; cursor: pointer;">
+        <div class="mini-icon" style="
+           font-size: 2rem; 
+           background: var(--cream); 
+           width: 56px; height: 56px; 
+           border-radius: 12px; 
+           display: flex; align-items: center; justify-content: center;
+           border: 2px solid var(--border-color);
+        ">
+           ${getItemIcon(type)}
+        </div>
+        <div class="mini-info" style="flex: 1;">
+           <h3 style="margin: 0; font-size: 1.1rem; line-height: 1.2;">${item.title || item.name}</h3>
+           <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px;">
+              ${dateStr} • ${timeStr}
+           </div>
+           ${item.location?.displayName ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">📍 ${item.location.displayName}</div>` : ''}
+        </div>
+        <div class="mini-arrow" style="font-size: 1.5rem; color: var(--text-muted);">›</div>
+      </div>
+    `;
+
+    // Click card to open full details
+    content.onclick = () => {
+      if (callbacks.onView) callbacks.onView(type, item);
+      hideCard();
+    };
+
+    // Show it
+    card.style.transform = 'translateY(0)';
+  };
+
+  // Initialize Map with showCard callback (Single Call)
+  initMapView(allMapEvents, trip, callbacks, showCard);
 }
 
-function initMapView(events, trip) {
+function getItemIcon(type) {
+  const map = { flight: '✈️', stay: '🏨', activity: '📍', transit: '🚆' };
+  return map[type] || '📅';
+}
+
+function initMapView(events, trip, callbacks, showCard) {
   const mapContainer = document.getElementById('trip-map-react-root');
   if (!mapContainer) return;
 
@@ -174,22 +227,22 @@ function initMapView(events, trip) {
     if (!document.querySelector('script[src*="leaflet"]')) {
       const script = document.createElement('script');
       script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = () => renderMap(mapContainer, events, trip);
+      script.onload = () => renderMap(mapContainer, events, trip, callbacks, showCard);
       document.body.appendChild(script);
     } else {
       const check = setInterval(() => {
         if (window.L) {
           clearInterval(check);
-          renderMap(mapContainer, events, trip);
+          renderMap(mapContainer, events, trip, callbacks, showCard);
         }
       }, 100);
     }
   } else {
-    renderMap(mapContainer, events, trip);
+    renderMap(mapContainer, events, trip, callbacks, showCard);
   }
 }
 
-function renderMap(container, events, trip) {
+function renderMap(container, events, trip, callbacks, showCard) {
   container.innerHTML = '';
   const L = window.L;
 
@@ -234,14 +287,56 @@ function renderMap(container, events, trip) {
   };
 
   events.forEach(event => {
-    const coords = event.coordinates;
+    let coords = event.coordinates;
+    const locationName = typeof event.location === 'string' ? event.location : event.location?.displayName;
+
+    if (!coords && locationName) {
+      // Try to geocode on the fly
+      // Use a simple cache key to avoid re-fetching the same location multiple times in a session
+      const cacheKey = `geo:${locationName}`;
+      const cached = sessionStorage.getItem(cacheKey);
+
+      if (cached) {
+        try {
+          const { lat, lon } = JSON.parse(cached);
+          coords = { lat, lng: lon }; // normalize lon -> lng
+        } catch (e) { }
+      } else {
+        // Fetch async and add marker later
+        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(locationName)}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data && data.length > 0) {
+              const { lat, lon } = data[0];
+              sessionStorage.setItem(cacheKey, JSON.stringify({ lat, lon }));
+              // Add marker dynamically (no bounds update to avoid jumping)
+              addMarker({ ...event, coordinates: { lat, lng: lon } }, map, L, callbacks, TYPE_CONFIG, showCard);
+            }
+          })
+          .catch(err => console.warn('[Map] Item geocoding failed:', locationName, err));
+
+        return; // Skip sync render, wait for async
+      }
+    }
+
     if (!coords || !coords.lat || !coords.lng) return;
 
-    const config = TYPE_CONFIG[event.type] || TYPE_CONFIG.activity;
+    addMarker({ ...event, coordinates: coords }, map, L, callbacks, TYPE_CONFIG, showCard);
+    bounds.push([coords.lat, coords.lng]);
+  });
 
-    const icon = L.divIcon({
-      className: 'custom-map-pin',
-      html: `
+  if (bounds.length > 0) {
+    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+  }
+}
+
+function addMarker(event, map, L, callbacks, TYPE_CONFIG, showCard) {
+  const coords = event.coordinates;
+  const config = TYPE_CONFIG[event.type] || TYPE_CONFIG.activity;
+
+  const icon = L.divIcon({
+    className: 'custom-map-pin',
+    html: `
         <div class="map-pin-marker" style="
           background: ${config.color}; 
           color: white;
@@ -271,33 +366,25 @@ function renderMap(container, events, trip) {
           "></div>
         </div>
       `,
-      iconSize: [36, 42],
-      iconAnchor: [18, 42],
-    });
-
-    const marker = L.marker([coords.lat, coords.lng], { icon }).addTo(map);
-
-    marker.on('click', () => {
-      // Trigger View Mode if callback provided
-      if (typeof callbacks?.onView === 'function') {
-        callbacks.onView(event.type, event.data);
-      } else {
-        // Fallback or old behavior (removed)
-        console.warn('No onView callback provided for map item', event);
-      }
-
-      map.flyTo([coords.lat, coords.lng], map.getZoom(), {
-        animate: true,
-        duration: 0.5
-      });
-    });
-
-    bounds.push([coords.lat, coords.lng]);
+    iconSize: [36, 42],
+    iconAnchor: [18, 42],
   });
 
-  if (bounds.length > 0) {
-    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
-  }
+  const marker = L.marker([coords.lat, coords.lng], { icon }).addTo(map);
+
+  marker.on('click', () => {
+    // Display Mini Card instead of opening full view immediately
+    if (showCard) {
+      showCard(event);
+    } else if (callbacks?.onView) {
+      callbacks.onView(event.type, event.data);
+    }
+
+    map.flyTo([coords.lat, coords.lng], map.getZoom(), {
+      animate: true,
+      duration: 0.5
+    });
+  });
 }
 
 function formatDateRange(start, end) {

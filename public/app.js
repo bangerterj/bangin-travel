@@ -628,7 +628,8 @@ class App {
                 onAllTrips: () => {
                     store.setActiveTrip(null);
                     this.render();
-                }
+                },
+                onView: (type, item) => this.handleViewItem(type, item)
             };
 
             switch (activeTab) {
@@ -639,15 +640,10 @@ class App {
                     });
                     break;
                 case 'calendar':
-                    renderCalendar(activePane, store, (type, data, mode) => {
-                        if (mode === 'edit') {
-                            this.openEntityModal(type === 'activity' ? 'activities' : type + 's', data);
-                        } else if (mode === 'view') {
-                            this.handleViewItem(type, data);
-                        } else {
-                            // Creating new item
-                            this.handleAddItemFromCalendar(data);
-                        }
+                    renderCalendar(activePane, store, {
+                        onAdd: (type, item) => this.openEntityModal(type, item),
+                        onView: (type, item) => this.handleViewItem(type, item),
+                        onAddFromCalendar: (dateData) => this.handleAddItemFromCalendar(dateData)
                     });
                     break;
                 case 'flights':
@@ -683,11 +679,12 @@ class App {
                     store.setActiveTrip(id);
                     this.render();
                 },
-                onSettings: () => this.handleTripEdit(),
+                onEditTrip: () => this.handleTripEdit(store.getActiveTrip()),
                 onAllTrips: () => {
                     store.setActiveTrip(null);
                     this.render();
-                }
+                },
+                onView: (type, item) => this.handleViewItem(type, item)
             });
         }
     }
@@ -810,7 +807,11 @@ class App {
         if (editBtn) {
             editBtn.addEventListener('click', () => {
                 // Switch to edit mode
-                const editType = type === 'activity' ? 'activities' : type + 's';
+                // Mapping: flight->flights, stay->stays, transit->transit, activity->activities
+                let editType = type + 's';
+                if (type === 'transit') editType = 'transit';
+                if (type === 'activity') editType = 'activities';
+
                 this.openEntityModal(editType, item);
             });
         }
@@ -1790,3 +1791,4 @@ window.app = new App();
 
 // For debugging
 window.store = store;
+

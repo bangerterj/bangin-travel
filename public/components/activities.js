@@ -67,18 +67,17 @@ export function renderActivities(container, store, callbacks) {
     }).join('');
 
     container.innerHTML = `
-      <div class="tab-header">
-        <div class="tab-title">
+      <div class="tab-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <div class="tab-title" style="display: flex; align-items: center; gap: 12px;">
           <span style="font-size: 1.5rem;">📍</span>
-          <h2>Activities</h2>
+          <h2 style="margin: 0;">Activities</h2>
         </div>
-        ${callbacks ? `<button class="btn-primary" id="add-activity-btn">➕ Add Activity</button>` : ''}
+        ${callbacks ? `<button class="btn-primary-compact" id="add-activity-btn" title="Add Activity">➕</button>` : ''}
       </div>
 
       ${activityGroups.length > 0 ? activityGroups : `
-        <div class="empty-state">
-          <div style="font-size: 3rem; margin-bottom: 1rem;">📍</div>
-          <p>No activities added yet.</p>
+        <div class="empty-state" style="text-align: center; padding: 40px 0;">
+          <p style="color: var(--text-secondary);">No activities added yet.</p>
         </div>
       `}
     `;
@@ -97,6 +96,17 @@ export function renderActivities(container, store, callbacks) {
           callbacks.onAdd('activities');
         });
       }
+
+      // View Details on Card Click
+      container.querySelectorAll('.unified-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+          if (e.target.closest('.btn-action') || e.target.closest('a')) return;
+          const item = activities.find(a => a.id === card.dataset.id);
+          if (item && callbacks.onView) {
+            callbacks.onView('activity', item);
+          }
+        });
+      });
     }
   }
 
@@ -126,8 +136,8 @@ export function renderActivityForm(activity = null) {
   const data = activity ? {
     name: activity.name || activity.title || '',
     location: extractLocation(activity),
-    startTime: getStartTime(activity),
-    endTime: getEndTime(activity),
+    startTime: activity.isNew ? `${activity.date}T${activity.startTime}` : getStartTime(activity),
+    endTime: activity.isNew ? `${activity.date}T${activity.endTime}` : getEndTime(activity),
     status: activity.status || 'planned',
     cost: activity.cost || activity.metadata?.cost || { amount: 0, currency: 'USD' },
     notes: activity.notes || '',
@@ -150,9 +160,11 @@ export function renderActivityForm(activity = null) {
   /* Robust Date Formatter using Trip Timezone */
   const formatDateForInput = (dateStr) => {
     if (!dateStr) return '';
+    // If it's already in the correct format from pre-fill (YYYY-MM-DDTHH:mm), return it
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dateStr)) return dateStr;
+
     const trip = window.store?.getActiveTrip();
     const timezone = trip?.timezone || 'UTC';
-
     try {
       const date = new Date(dateStr);
       if (isNaN(date.getTime())) return '';
@@ -161,7 +173,6 @@ export function renderActivityForm(activity = null) {
       const getPart = (type) => parts.find(p => p.type === type)?.value;
       return `${getPart('year')}-${getPart('month')}-${getPart('day')}T${getPart('hour')}:${getPart('minute')}`;
     } catch (e) {
-      console.error('Date format error', e);
       return dateStr ? new Date(dateStr).toISOString().slice(0, 16) : '';
     }
   };

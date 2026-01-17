@@ -65,38 +65,73 @@ export function renderItemDetails(item, category) {
         `;
     }
 
+    // --- Location Data (Map Links) ---
+    let locationSection = '';
+
+    // Helper for map link
+    const renderMapLink = (label, query, appendSuffix = '') => {
+        if (!query) return '';
+        const searchQuery = appendSuffix ? `${query} ${appendSuffix}` : query;
+        return `
+            <div class="location-block">
+                <div class="location-label">${label}</div>
+                <div class="location-text">${query}</div>
+                <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(searchQuery)}" 
+                   target="_blank" class="map-link">🗺️ Open in Maps</a>
+            </div>
+        `;
+    };
+
+    if (category === 'flight') {
+        // Show both airports with 'airport' suffix for better accuracy with 3-letter codes
+        if (item.departureAirport) locationSection += renderMapLink('Departure Airport', item.departureAirport, 'airport');
+        if (item.arrivalAirport) locationSection += renderMapLink('Arrival Airport', item.arrivalAirport, 'airport');
+    } else if (category === 'transit') {
+        if (item.type === 'rental_car') {
+            locationSection += renderMapLink('Pick-up Location', item.departureLocation);
+        } else {
+            if (item.departureLocation) locationSection += renderMapLink('Departure', item.departureLocation);
+            if (item.arrivalLocation) locationSection += renderMapLink('Arrival', item.arrivalLocation);
+        }
+    } else {
+        // Stays and Activities usually have one main address/location
+        const loc = item.address || item.location;
+        if (loc) {
+            locationSection += renderMapLink('Location', loc);
+        }
+    }
+
     // --- Cost Data ---
-    // Note: 'cost' might be a number or an object { amount, currency, paidBy }
-    // We handle mostly the object structure or simple number fallback
     let costText = '';
-    let payer = '';
     if (item.cost) {
         const amount = typeof item.cost === 'object' ? item.cost.amount : item.cost;
         const currency = (typeof item.cost === 'object' ? item.cost.currency : 'USD') || 'USD';
-        const paidById = typeof item.cost === 'object' ? item.cost.paidBy : null;
-
         if (amount) {
             costText = `$${Number(amount).toLocaleString()} ${currency}`;
         }
-        // TODO: Resolve paidBy ID to Name if store available? 
-        // For now we just show the ID or skip it if we can't look it up easily here.
-        // We'll skip payer name lookup for MVP in this view unless we pass the whole store.
     }
+
+    // Smart Header: Hide type if redundant (e.g. FLIGHT • FLIGHT -> FLIGHT)
+    const typeLabel = (item.type && item.type.toLowerCase() !== category.toLowerCase())
+        ? `${category} • ${item.type}`
+        : category;
 
 
     return `
         <div class="details-view">
             <!-- HEADER -->
             <div class="details-header">
-                <div class="status-badge ${isBooked ? 'booked' : 'planned'}">
-                    ${isBooked ? '✅ BOOKED' : '💭 PLANNED'}
-                </div>
                 <div class="header-content">
                     <div class="header-icon">${getIcon(category, item.type)}</div>
                     <div class="header-text">
-                        <div class="type-label">${category} • ${item.type || 'Standard'}</div>
+                        <div class="type-label">
+                            ${typeLabel}
+                            <div class="status-badge ${isBooked ? 'booked' : 'planned'}">
+                                ${isBooked ? '✅ BOOKED' : '💭 PLANNED'}
+                            </div>
+                        </div>
                         <h2 class="title">${title}</h2>
-                        ${subtitle ? `<div class="subtitle">${subtitle}</div>` : ''}
+                        ${subtitle ? `<div class="subtitle" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; white-space: normal;">${subtitle}</div>` : ''}
                     </div>
                 </div>
             </div>
@@ -105,7 +140,7 @@ export function renderItemDetails(item, category) {
             <div class="details-body">
                 
                 <!-- TIME -->
-                <div class="section">
+                <div class="section icon-row">
                     <div class="section-row">
                         <span class="icon">📅</span>
                         <div class="section-content">
@@ -115,16 +150,12 @@ export function renderItemDetails(item, category) {
                 </div>
 
                 <!-- LOCATION -->
-                ${(item.address || item.location || item.arrivalAirport) ? `
-                    <div class="section">
+                ${locationSection ? `
+                    <div class="section icon-row">
                         <div class="section-row">
                             <span class="icon">📍</span>
                             <div class="section-content">
-                                <div class="location-text">
-                                    ${item.address || item.location || (item.arrivalAirport ? `${item.arrivalAirport} (Arrival)` : '')}
-                                </div>
-                                <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.address || item.location || item.arrivalAirport)}" 
-                                   target="_blank" class="map-link">Open in Maps ↗</a>
+                                ${locationSection}
                             </div>
                         </div>
                     </div>
@@ -142,7 +173,7 @@ export function renderItemDetails(item, category) {
 
                 <!-- COST -->
                 ${costText ? `
-                    <div class="section">
+                    <div class="section icon-row">
                         <div class="section-row">
                              <span class="icon">💰</span>
                              <div class="section-content">

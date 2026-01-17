@@ -1,672 +1,453 @@
 /**
- * Calendar Component - Redesigned with Timeline View
- * Replaces month-grid with vertical day columns for drag-to-create interactions
- * Integrates with TripService for real-time CRUD operations
+ * Calendar Component - High Quality Timeline View
+ * Replicates the robust logic and styling from the React Sandbox (timeline.js)
  */
 
-export function renderCalendar(container, store, openModal) {
+export function renderCalendar(container, store, callbacks) {
   const trip = store.getActiveTrip();
   if (!trip) return;
 
-  // Get trip date range
-  const tripStart = new Date(trip.startDate + 'T00:00:00');
-  const tripEnd = new Date(trip.endDate + 'T00:00:00');
+  // Constants (Matched to Sandbox)
+  const SLOT_HEIGHT = 15;
+  const HOUR_HEIGHT = 60;
+  const HEADER_HEIGHT = 52;
+  const START_HOUR = 0;
+  const END_HOUR = 24;
+  const GRID_OFFSET = 16; // Top spacing
 
-  // State: current week offset from trip start
-  let weekOffset = 0;
+  // State (Closure-based)
+  if (window._calendarState === undefined) {
+    window._calendarState = {
+      weekOffset: 0,
+      viewMode: 'week', // 'week' | 'day'
+      selectedDay: null // Date object for day view
+    };
+  }
+  let state = window._calendarState;
 
+  // Selection / Drag State
+  let activeSelection = null;
+  let isDragging = false;
+  let isResizing = null;
+  let dragStartY = 0;
+  let activeColumn = null;
+
+  // Helper: Format Date
+  const formatDate = (date) => date.toISOString().split('T')[0];
+
+  const formatTimeStr = (t) => {
+    return `${String(t.hour).padStart(2, '0')}:${String(t.minutes).padStart(2, '0')}`;
+  };
+
+  // Helper: Get time from Y position (relative to slots)
+  const getTimeFromY = (y) => {
+    const relativeY = Math.max(0, y - GRID_OFFSET);
+    const totalMinutes = Math.round(relativeY / SLOT_HEIGHT) * 15;
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (hours >= 24) return { hour: 23, minutes: 59 };
+
+    return {
+      hour: Math.min(Math.max(hours, 0), 23),
+      minutes: Math.min(Math.max(minutes, 0), 59)
+    };
+  };
+
+  // Main Render Function
   function render() {
-    // Calculate the days to display (7 days based on weekOffset)
-    const startOfWeek = new Date(tripStart);
-    startOfWeek.setDate(tripStart.getDate() + (weekOffset * 7));
+    const tripStart = new Date(trip.startDate + 'T00:00:00');
 
-    const days = [];
-    for (let i = 0; i < 7; i++) {
-      const day = new Date(startOfWeek);
-      day.setDate(startOfWeek.getDate() + i);
-      days.push(day);
+    // Calculate visible days
+    let days = [];
+    if (state.viewMode === 'week') {
+      const startOfWeek = new Date(tripStart);
+      startOfWeek.setDate(tripStart.getDate() + (state.weekOffset * 7));
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(startOfWeek);
+        d.setDate(startOfWeek.getDate() + i);
+        days.push(d);
+      }
+    } else {
+      days = [state.selectedDay || tripStart];
     }
 
-    // Collect all items and convert to timeline format
-    const { flights, stays, activities, transit } = trip;
+    const weekRange = state.viewMode === 'week'
+      ? `${days[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${days[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${days[6].getFullYear()}`
+      : `${days[0].toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`;
 
-    const allItems = [
-      ...flights.map(f => ({
-        id: f.id,
-        type: 'flight',
-        title: `${f.airline || ''} ${f.flightNumber || f.title}`.trim(),
-        startTime: f.startAt || f.departureTime,
-        endTime: f.endAt || f.arrivalTime,
-        data: f
-      })),
-      ...stays.map(s => ({
-        id: s.id,
-        type: 'stay',
-        title: s.name || s.title,
-        startTime: s.startAt || s.checkIn,
-        endTime: s.endAt || s.checkOut,
-        data: s
-      })),
-      ...activities.map(a => ({
-        id: a.id,
-        type: 'activity',
-        title: a.name || a.title,
-        startTime: a.startAt || a.startTime,
-        endTime: a.endAt || a.endTime,
-        data: a
-      })),
-      ...transit.map(t => ({
-        id: t.id,
-        type: 'transit',
-        title: t.name || t.title,
-        startTime: t.startAt || t.departureTime,
-        endTime: t.endAt || t.arrivalTime,
-        data: t
-      }))
+    // Prepare Items
+    const items = [
+      ...trip.flights.map(f => ({ ...f, type: 'flight', startTime: f.startAt || f.departureTime, endTime: f.endAt || f.arrivalTime, title: f.title || `${f.airline} ${f.flightNumber}` })),
+      ...trip.stays.map(s => ({ ...s, type: 'stay', startTime: s.startAt || s.checkIn, endTime: s.endAt || s.checkOut, title: s.title || s.name })),
+      ...trip.activities.map(a => ({ ...a, type: 'activity', startTime: a.startAt, endTime: a.endAt, title: a.title || a.name })),
+      ...trip.transit.map(t => ({ ...t, type: 'transit', startTime: t.startAt || t.departureTime, endTime: t.endAt || t.arrivalTime, title: t.title || t.name }))
     ];
 
-    // Format week range for header
-    const weekStart = days[0];
-    const weekEnd = days[6];
-    const formatWeekDate = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    const weekRange = `${formatWeekDate(weekStart)} - ${formatWeekDate(weekEnd)}, ${weekEnd.getFullYear()}`;
-
     container.innerHTML = `
-      <div class="timeline-calendar">
-        <!-- Header -->
-        <header class="timeline-header">
-          <div class="timeline-title">
-            <h2>📅 Trip Timeline</h2>
-            <span class="week-range">${weekRange}</span>
-          </div>
+      <div class="timeline-calendar ${state.viewMode}-view" style="position: relative;">
+        <header class="timeline-header" style="height: 52px; padding: 0 12px; border-bottom: 2px solid var(--border-color); box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; background: var(--cream);">
           <div class="timeline-nav">
-            <button id="timeline-prev" class="btn-nav">◀ Prev Week</button>
-            <button id="timeline-today" class="btn-nav">Today</button>
-            <button id="timeline-next" class="btn-nav">Next Week ▶</button>
+             <button id="timeline-prev" class="btn-nav" title="Previous ${state.viewMode}">◀</button>
+             <button id="timeline-today" class="btn-nav">Today</button>
+             <button id="timeline-next" class="btn-nav" title="Next ${state.viewMode}">▶</button>
+             ${state.viewMode === 'day' ? `<button id="timeline-back" class="btn-nav">Week View</button>` : ''}
           </div>
+          <span class="week-range" style="font-weight: 700; color: var(--border-color);">${weekRange}</span>
         </header>
 
-        <!-- Instructions -->
-        <div class="timeline-instructions">
-          <span>📝 Drag on timeline to create • Click item to edit</span>
-        </div>
-
-        <!-- Timeline Grid -->
         <div class="timeline-wrapper">
-          <div class="timeline-hours">
-            <div class="hours-header-spacer"></div>
-            ${Array.from({ length: 24 }, (_, i) => `
-              <div class="hour-label">${i === 0 ? '12 AM' : i < 12 ? `${i} AM` : i === 12 ? '12 PM' : `${i - 12} PM`}</div>
-            `).join('')}
+          <div class="hour-sidebar" style="width: 60px; flex-shrink: 0;">
+             <div class="hours-header-spacer" style="height: 52px; border-bottom: 2px solid var(--border-color); box-sizing: border-box; background: var(--cream);"></div>
+             <div class="hour-labels-container" style="position: relative; height: ${24 * HOUR_HEIGHT + GRID_OFFSET}px;">
+                 ${Array.from({ length: 25 }, (_, i) => {
+      const label = i === 0 ? '12A' : i < 12 ? i + 'A' : i === 12 ? '12P' : i === 24 ? '12A' : (i - 12) + 'P';
+      const top = i * HOUR_HEIGHT + GRID_OFFSET;
+      return `<div class="hour-label" style="position: absolute; top: ${top}px; right: 8px; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); line-height: 1;">${label}</div>`;
+    }).join('')}
+             </div>
           </div>
-          <div class="timeline-grid" id="timeline-grid">
-            ${days.map(day => renderDayColumn(day, allItems, trip)).join('')}
-          </div>
-        </div>
 
-        <!-- Legend -->
-        <div class="timeline-legend">
-          <span><span class="legend-dot flight"></span> Flight</span>
-          <span><span class="legend-dot stay"></span> Stay</span>
-          <span><span class="legend-dot transit"></span> Transit</span>
-          <span><span class="legend-dot activity"></span> Activity</span>
+          <div class="timeline-container" id="timeline-scroll-area" style="overscroll-behavior-y: contain;">
+             <div class="timeline-grid" id="timeline-grid" style="grid-template-columns: repeat(${days.length}, 1fr);">
+                ${days.map(day => renderDayColumn(day, items)).join('')}
+             </div>
+          </div>
         </div>
+        
+        <button id="calendar-fab" class="calendar-fab hidden" style="position: absolute; bottom: 16px; right: 16px; width: 48px; height: 48px; border-radius: 50%; background: var(--accent-orange); color: white; border: 3px solid var(--border-color); box-shadow: 3px 3px 0 var(--border-color); font-size: 1.25rem; font-weight: bold; cursor: pointer; z-index: 100; display: flex; align-items: center; justify-content: center;">+</button>
       </div>
-
-      <style>
-        .timeline-calendar {
-          display: flex;
-          flex-direction: column;
-          height: calc(100vh - 150px);
-          min-height: 600px;
-        }
-
-        .timeline-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 16px 20px;
-          background: var(--cream, #f8f4eb);
-          border: 3px solid var(--border-color, #2c3e50);
-          border-radius: 12px 12px 0 0;
-          flex-wrap: wrap;
-          gap: 12px;
-        }
-
-        .timeline-title h2 {
-          margin: 0;
-          font-size: 1.3rem;
-        }
-
-        .week-range {
-          font-size: 0.9rem;
-          color: var(--text-secondary, #5d6d7e);
-          margin-left: 12px;
-        }
-
-        .timeline-nav {
-          display: flex;
-          gap: 8px;
-        }
-
-        .btn-nav {
-          padding: 8px 16px;
-          background: white;
-          border: 2px solid var(--border-color, #2c3e50);
-          border-radius: 6px;
-          font-weight: 600;
-          cursor: pointer;
-          font-size: 0.85rem;
-        }
-
-        .btn-nav:hover {
-          background: var(--cream, #f8f4eb);
-        }
-
-        .timeline-instructions {
-          padding: 8px 16px;
-          background: white;
-          border-left: 3px solid var(--border-color, #2c3e50);
-          border-right: 3px solid var(--border-color, #2c3e50);
-          font-size: 0.8rem;
-          color: var(--text-secondary, #5d6d7e);
-        }
-
-        .timeline-wrapper {
-          flex: 1;
-          display: flex;
-          overflow: auto;
-          border: 3px solid var(--border-color, #2c3e50);
-          border-top: none;
-          border-radius: 0 0 12px 12px;
-          background: white;
-        }
-
-        .timeline-hours {
-          width: 60px;
-          flex-shrink: 0;
-          background: var(--cream, #f8f4eb);
-          border-right: 2px solid var(--border-color, #2c3e50);
-          height: 1492px; /* Force full height to match grid */
-          min-height: 1492px;
-        }
-
-        .hour-label {
-          height: 60px;
-          padding: 2px 8px;
-          font-size: 0.7rem;
-          color: var(--text-secondary, #5d6d7e);
-          border-top: 1px solid rgba(0,0,0,0.1);
-          box-sizing: border-box;
-        }
-
-        .hours-header-spacer {
-          height: 52px; /* Match day header height */
-          background: var(--cream, #f8f4eb);
-          border-bottom: 2px solid var(--border-color, #2c3e50);
-        }
-
-        .timeline-grid {
-          flex: 1;
-          display: grid;
-          grid-template-columns: repeat(7, 1fr);
-          min-width: 700px;
-        }
-
-        .day-column {
-          position: relative;
-          border-right: 1px solid rgba(0,0,0,0.1);
-          /* 15-minute Gridlines */
-          background-color: var(--white);
-          background-image: 
-            linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
-            linear-gradient(rgba(0,0,0,0.08) 1px, transparent 1px);
-          background-size: 100% 15px, 100% 60px; /* 15m lines, Hour lines */
-          background-position: 0 52px; /* Offset for header */
-          background-repeat: repeat;
-          height: 1492px; /* Force full height (24h * 60px + 52px) */
-          min-height: 1492px;
-        }
-
-        .day-column:last-child {
-          border-right: none;
-        }
-
-        .day-column.out-of-trip {
-          background-color: rgba(0,0,0,0.03);
-          background-image: none;
-        }
-
-        .day-header {
-          position: sticky;
-          top: 0;
-          height: 52px; /* Fixed height for alignment */
-          box-sizing: border-box;
-          background: var(--cream, #f8f4eb);
-          padding: 8px;
-          text-align: center;
-          border-bottom: 2px solid var(--border-color, #2c3e50);
-          z-index: 10;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-        }
-
-        .day-header-dow {
-          font-weight: 700;
-          font-size: 0.8rem;
-          line-height: 1.2;
-        }
-
-        .day-header-date {
-          font-size: 1.1rem;
-          font-weight: 800;
-          line-height: 1.2;
-        }
-
-        .day-header.today {
-          background: #3498db;
-          color: white;
-        }
-
-        /* Timeline Items */
-        .timeline-item {
-          position: absolute;
-          left: 4px;
-          right: 4px;
-          border-radius: 6px;
-          padding: 6px 8px;
-          font-size: 0.75rem;
-          cursor: pointer;
-          border: 2px solid var(--border-color, #2c3e50);
-          box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
-          overflow: hidden;
-          z-index: 5;
-          transition: transform 0.1s, box-shadow 0.1s;
-        }
-
-        .timeline-item:hover {
-          transform: translateY(-2px);
-          box-shadow: 4px 4px 0 rgba(0,0,0,0.15);
-          z-index: 20;
-        }
-
-        .timeline-item.flight { background: #3498db; color: white; }
-        .timeline-item.stay { background: #9b59b6; color: white; }
-        .timeline-item.transit { background: #1abc9c; color: white; }
-        .timeline-item.activity { background: #e67e22; color: white; }
-
-        .item-title {
-          font-weight: 700;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .item-time {
-          font-size: 0.65rem;
-          opacity: 0.9;
-        }
-
-        /* Legend */
-        .timeline-legend {
-          display: flex;
-          gap: 20px;
-          padding: 12px 16px;
-          margin-top: 12px;
-          background: white;
-          border: 3px solid var(--border-color, #2c3e50);
-          border-radius: 12px;
-          font-size: 0.8rem;
-        }
-
-        .legend-dot {
-          display: inline-block;
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          margin-right: 6px;
-          vertical-align: middle;
-        }
-
-        .legend-dot.flight { background: #3498db; }
-        .legend-dot.stay { background: #9b59b6; }
-        .legend-dot.transit { background: #1abc9c; }
-        .legend-dot.activity { background: #e67e22; }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-          .timeline-grid {
-            grid-template-columns: repeat(3, 1fr);
-          }
-          
-          .timeline-header {
-            flex-direction: column;
-            align-items: flex-start;
-          }
-        }
-      </style>
     `;
 
-    // Event listeners
-    document.getElementById('timeline-prev').addEventListener('click', () => {
-      weekOffset--;
-      render();
-    });
+    bindEvents(days, items);
 
-    document.getElementById('timeline-next').addEventListener('click', () => {
-      weekOffset++;
-      render();
-    });
+    // Sync Scroll: Sidebar moves with Grid vertically
+    const scrollArea = container.querySelector('#timeline-scroll-area');
+    const sidebar = container.querySelector('.hour-sidebar');
+    scrollArea.onscroll = () => {
+      sidebar.scrollTop = scrollArea.scrollTop;
+    };
+  }
 
-    document.getElementById('timeline-today').addEventListener('click', () => {
-      // Calculate offset to show current week
-      const today = new Date();
-      const diffDays = Math.floor((today - tripStart) / (1000 * 60 * 60 * 24));
-      weekOffset = Math.floor(diffDays / 7);
-      render();
-    });
+  function renderDayColumn(day, items) {
+    const dateStr = formatDate(day);
+    const dayName = day.toLocaleDateString('en-US', { weekday: 'short' });
+    const dayNum = day.getDate();
+    const isToday = formatDate(new Date()) === dateStr;
 
-    // Item click handlers
-    document.querySelectorAll('.timeline-item').forEach(item => {
-      item.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const itemId = item.dataset.id;
-        const itemType = item.dataset.type;
+    // Filter items
+    const dayItems = items.filter(item => item.startTime && item.startTime.startsWith(dateStr));
 
-        // Find the item data
-        const itemData = allItems.find(i => i.id === itemId);
-        if (itemData && openModal) {
-          openModal(itemType, itemData.data, 'view');
-        }
-      });
-    });
+    const itemsHtml = dayItems.map(item => {
+      const start = new Date(item.startTime);
+      const end = item.endTime ? new Date(item.endTime) : new Date(start.getTime() + 60 * 60 * 1000);
 
-    // Drag-to-create on day columns (mouse + touch)
-    document.querySelectorAll('.day-column').forEach(column => {
-      let isDragging = false;
-      let startY = 0;
-      let currentY = 0;
-      let dragIndicator = null;
-      let longPressTimer = null;
-      let touchStartX = 0;
-      let touchStartY = 0;
+      const top = (start.getHours() + start.getMinutes() / 60) * HOUR_HEIGHT + GRID_OFFSET;
+      const bottom = (end.getHours() + end.getMinutes() / 60) * HOUR_HEIGHT + GRID_OFFSET;
+      const height = Math.max(30, bottom - top);
 
-      const HEADER_HEIGHT = 52; // Height of sticky day header
-      const LONG_PRESS_DURATION = 500; // ms
-
-      const getTimeFromY = (y, rect) => {
-        const relY = y - rect.top - HEADER_HEIGHT;
-        const hour = Math.floor(relY / 60);
-        const minutes = Math.floor((relY % 60) / 15) * 15;
-        return { hour: Math.max(0, Math.min(23, hour)), minutes };
-      };
-
-      const createDragIndicator = () => {
-        const indicator = document.createElement('div');
-        indicator.className = 'drag-indicator';
-        indicator.style.cssText = `
-          position: absolute;
-          left: 4px;
-          right: 4px;
-          background: rgba(52, 152, 219, 0.3);
-          border: 2px dashed #3498db;
-          border-radius: 6px;
-          pointer-events: none;
-          z-index: 15;
+      return `
+          <div class="timeline-item ${item.type}" 
+               data-id="${item.id}" 
+               data-type="${item.type}"
+               style="top: ${top}px; height: ${height}px; z-index: 10; cursor: pointer;">
+             <div class="item-title">${item.title}</div>
+             <div class="item-time">${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</div>
+          </div>
         `;
-        return indicator;
-      };
+    }).join('');
 
-      const startDrag = (clientY) => {
-        if (isDragging) return;
-        isDragging = true;
-        const rect = column.getBoundingClientRect();
-        startY = clientY;
-        currentY = clientY;
+    // Visual grid lines (High Precision)
+    const gridLines = [];
+    // Always start with a line at the very top (Hour 0)
+    gridLines.push(`<div class="slot-line hour-line top-most" style="position: absolute; top: ${GRID_OFFSET}px; left: 0; right: 0; border-top: 2px solid rgba(0,0,0,0.15); height: 0; z-index: 1;"></div>`);
 
-        dragIndicator = createDragIndicator();
-        column.appendChild(dragIndicator);
+    for (let h = 0; h < 24; h++) {
+      for (let m = 0; m < 60; m += 15) {
+        if (h === 0 && m === 0) continue; // Already added as top-most
+        const top = (h + m / 60) * HOUR_HEIGHT + GRID_OFFSET;
+        gridLines.push(`<div class="slot-line ${m === 0 ? 'hour-line' : 'quarter-line'}" style="position: absolute; top: ${top}px; left: 0; right: 0; border-top: 1px solid ${m === 0 ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0.03)'}; height: 0; z-index: 1;"></div>`);
+      }
+    }
 
-        const startTime = getTimeFromY(startY, rect);
-        dragIndicator.style.top = `${startTime.hour * 60 + startTime.minutes + HEADER_HEIGHT}px`;
-        dragIndicator.style.height = '30px';
-      };
+    return `
+      <div class="day-column" data-date="${dateStr}">
+         <div class="day-header ${isToday ? 'today' : ''}" style="height: 52px; border-bottom: 2px solid var(--border-color); box-sizing: border-box; position: sticky; top: 0; z-index: 20;">
+            <div class="day-header-dow">${dayName}</div>
+            <div class="day-header-date">${dayNum}</div>
+         </div>
+         <div class="day-slots" style="height: ${24 * HOUR_HEIGHT + GRID_OFFSET}px;">
+            ${gridLines.join('')}
+            ${itemsHtml}
+         </div>
+      </div>
+    `;
+  }
 
-      const updateDrag = (clientY) => {
-        if (!isDragging || !dragIndicator) return;
+  function bindEvents(days, items) {
+    // Nav
+    document.getElementById('timeline-prev').onclick = () => {
+      if (state.viewMode === 'week') state.weekOffset--;
+      else state.selectedDay.setDate(state.selectedDay.getDate() - 1);
+      render();
+    };
+    document.getElementById('timeline-next').onclick = () => {
+      if (state.viewMode === 'week') state.weekOffset++;
+      else state.selectedDay.setDate(state.selectedDay.getDate() + 1);
+      render();
+    };
+    document.getElementById('timeline-today').onclick = () => {
+      if (state.viewMode === 'week') {
+        state.weekOffset = 0;
+      } else {
+        state.selectedDay = new Date();
+      }
+      render();
+    };
+    const backBtn = document.getElementById('timeline-back');
+    if (backBtn) backBtn.onclick = () => {
+      state.viewMode = 'week';
+      render();
+    };
 
-        currentY = clientY;
-        const rect = column.getBoundingClientRect();
 
-        const startTime = getTimeFromY(startY, rect);
-        const endTime = getTimeFromY(currentY, rect);
-
-        const startPx = Math.min(startTime.hour * 60 + startTime.minutes, endTime.hour * 60 + endTime.minutes);
-        const endPx = Math.max(startTime.hour * 60 + startTime.minutes, endTime.hour * 60 + endTime.minutes);
-
-        dragIndicator.style.top = `${startPx + HEADER_HEIGHT}px`;
-        dragIndicator.style.height = `${Math.max(30, endPx - startPx)}px`;
-      };
-
-      const endDrag = () => {
-        if (!isDragging) return;
-        isDragging = false;
-
-        if (dragIndicator) {
-          dragIndicator.remove();
-          dragIndicator = null;
-        }
-
-        if (Math.abs(currentY - startY) < 10) return; // Too small
-
-        const rect = column.getBoundingClientRect();
-        const startTime = getTimeFromY(startY, rect);
-        const endTime = getTimeFromY(currentY, rect);
-
-        const date = column.dataset.date;
-
-        const formatTime = (t) => `${String(t.hour).padStart(2, '0')}:${String(t.minutes).padStart(2, '0')}`;
-
-        const earlier = startTime.hour * 60 + startTime.minutes < endTime.hour * 60 + endTime.minutes ? startTime : endTime;
-        const later = startTime.hour * 60 + startTime.minutes >= endTime.hour * 60 + endTime.minutes ? startTime : endTime;
-
-        // Open modal for new item
-        if (openModal) {
-          openModal('activity', {
-            date: date,
-            startTime: formatTime(earlier),
-            endTime: formatTime(later),
-            isNew: true
-          }, 'create');
-        }
-      };
-
-      const cancelLongPress = () => {
-        if (longPressTimer) {
-          clearTimeout(longPressTimer);
-          longPressTimer = null;
+    // Day Header Click -> Switch to Day View
+    container.querySelectorAll('.day-header').forEach(header => {
+      header.onclick = () => {
+        if (state.viewMode === 'week') {
+          const dateStr = header.closest('.day-column').dataset.date;
+          state.selectedDay = new Date(dateStr + 'T00:00:00');
+          state.viewMode = 'day';
+          render();
         }
       };
-
-      // Mouse events
-      column.addEventListener('mousedown', (e) => {
-        if (e.target.closest('.timeline-item')) return;
-        startDrag(e.clientY);
-      });
-
-      column.addEventListener('mousemove', (e) => {
-        updateDrag(e.clientY);
-      });
-
-      column.addEventListener('mouseup', endDrag);
-      column.addEventListener('mouseleave', endDrag);
-
-      // Touch events
-      column.addEventListener('touchstart', (e) => {
-        if (e.target.closest('.timeline-item')) return;
-
-        const touch = e.touches[0];
-        touchStartX = touch.clientX;
-        touchStartY = touch.clientY;
-
-        // Start long-press timer
-        longPressTimer = setTimeout(() => {
-          // Long press detected - create item at this position
-          const rect = column.getBoundingClientRect();
-          const time = getTimeFromY(touch.clientY, rect);
-          const date = column.dataset.date;
-
-          const formatTime = (t) => `${String(t.hour).padStart(2, '0')}:${String(t.minutes).padStart(2, '0')}`;
-          const endHour = time.hour + 1;
-
-          // Vibrate if supported (haptic feedback)
-          if (navigator.vibrate) {
-            navigator.vibrate(50);
-          }
-
-          if (openModal) {
-            openModal('activity', {
-              date: date,
-              startTime: formatTime(time),
-              endTime: formatTime({ hour: Math.min(23, endHour), minutes: time.minutes }),
-              isNew: true
-            }, 'create');
-          }
-
-          longPressTimer = null;
-        }, LONG_PRESS_DURATION);
-      }, { passive: true });
-
-      column.addEventListener('touchmove', (e) => {
-        const touch = e.touches[0];
-        const deltaX = Math.abs(touch.clientX - touchStartX);
-        const deltaY = Math.abs(touch.clientY - touchStartY);
-
-        // If moved more than 10px, cancel long-press and start drag
-        if (deltaX > 10 || deltaY > 10) {
-          cancelLongPress();
-
-          // Start drag if vertical movement is dominant
-          if (deltaY > deltaX && !isDragging) {
-            startDrag(touchStartY);
-          }
-
-          if (isDragging) {
-            updateDrag(touch.clientY);
-          }
-        }
-      }, { passive: true });
-
-      column.addEventListener('touchend', () => {
-        cancelLongPress();
-        endDrag();
-      });
-
-      column.addEventListener('touchcancel', () => {
-        cancelLongPress();
-        if (dragIndicator) {
-          dragIndicator.remove();
-          dragIndicator = null;
-        }
-        isDragging = false;
-      });
     });
 
-    // Swipe navigation on timeline wrapper
-    const timelineWrapper = document.querySelector('.timeline-wrapper');
-    if (timelineWrapper) {
-      let swipeStartX = 0;
-      let swipeStartY = 0;
+    // Item Clicks
+    container.querySelectorAll('.timeline-item').forEach(el => {
+      // Prevent grid from starting selection when clicking an item
+      el.onpointerdown = (e) => e.stopPropagation();
 
-      timelineWrapper.addEventListener('touchstart', (e) => {
-        swipeStartX = e.touches[0].clientX;
-        swipeStartY = e.touches[0].clientY;
-      }, { passive: true });
-
-      timelineWrapper.addEventListener('touchend', (e) => {
-        if (!e.changedTouches[0]) return;
-
-        const deltaX = e.changedTouches[0].clientX - swipeStartX;
-        const deltaY = e.changedTouches[0].clientY - swipeStartY;
-
-        // Only trigger if horizontal swipe is dominant and significant
-        if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
-          if (deltaX > 0) {
-            // Swipe right - go to previous week
-            weekOffset--;
-            render();
-          } else {
-            // Swipe left - go to next week
-            weekOffset++;
-            render();
-          }
+      el.onclick = (e) => {
+        e.stopPropagation();
+        const itemId = el.dataset.id;
+        // Search in items with loose ID matching
+        const item = items.find(i => String(i.id) === String(itemId));
+        if (item && callbacks.onView) {
+          const viewType = item.type || el.dataset.type;
+          callbacks.onView(viewType, item);
         }
-      });
+      };
+    });
+
+    // Swipe Support (Improved Sensitivity)
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+
+    const onTouchStart = (e) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
+    };
+
+    const onTouchEnd = (e) => {
+      const touchEndX = e.changedTouches[0].clientX;
+      const touchEndY = e.changedTouches[0].clientY;
+      const diffX = touchEndX - touchStartX;
+      const diffY = touchEndY - touchStartY;
+      const duration = Date.now() - touchStartTime;
+
+      // Swipe Horizontal (Must be significant and more horizontal than vertical)
+      if (Math.abs(diffX) > 50 && Math.abs(diffX) > Math.abs(diffY) && duration < 500) {
+        if (diffX > 0) document.getElementById('timeline-prev').click();
+        else document.getElementById('timeline-next').click();
+      }
+    };
+
+    const scrollArea = document.getElementById('timeline-scroll-area');
+    const grid = document.getElementById('timeline-grid');
+
+    // Attach swipe to scroll area for better detection
+    scrollArea.addEventListener('touchstart', onTouchStart, { passive: true });
+    scrollArea.addEventListener('touchend', onTouchEnd, { passive: true });
+
+    let touchStartedPos = null;
+
+    const onPointerDown = (e) => {
+      if (e.button !== 0) return;
+
+      // Resize Handle (Always takes priority)
+      if (e.target.classList.contains('resize-handle')) {
+        e.preventDefault(); e.stopPropagation();
+        isResizing = e.target.classList.contains('top') ? 'top' : 'bottom';
+        activeColumn = e.target.closest('.day-column');
+        return;
+      }
+
+      // FAB or other actions
+      if (e.target.closest('#calendar-fab') || e.target.closest('.timeline-item')) {
+        // Clear selection if clicking an item too? User didn't specify, but often expected.
+        // For now just return to let item handler work.
+        return;
+      }
+
+      if (activeSelection) {
+        const rect = activeSelection.element.getBoundingClientRect();
+        const isInside = (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom);
+        if (!isInside) {
+          clearSelection();
+          // DO NOT start a new selection on this click
+          return;
+        }
+      }
+
+      const column = e.target.closest('.day-column');
+      if (!column) return;
+      const slots = column.querySelector('.day-slots');
+      if (!slots.contains(e.target)) return;
+
+      if (e.pointerType === 'touch') {
+        touchStartedPos = { x: e.clientX, y: e.clientY };
+        return; // Don't preventDefault, let scroll happen
+      }
+
+      startSelection(e, column, slots);
+    };
+
+    const startSelection = (e, column, slots) => {
+      isDragging = true;
+      activeColumn = column;
+      const rect = slots.getBoundingClientRect();
+      const rawY = e.clientY - rect.top;
+
+      const hour = Math.floor(Math.max(0, rawY - GRID_OFFSET) / HOUR_HEIGHT);
+      const snappedTop = hour * HOUR_HEIGHT + GRID_OFFSET;
+      const snappedBottom = (hour + 1) * HOUR_HEIGHT + GRID_OFFSET;
+
+      dragStartY = snappedTop;
+      createSelectionBox(snappedTop, snappedBottom, column);
+    };
+
+    const onPointerMove = (e) => {
+      if (e.pointerType === 'touch' && touchStartedPos && !isResizing && !isDragging) {
+        const dx = Math.abs(e.clientX - touchStartedPos.x);
+        const dy = Math.abs(e.clientY - touchStartedPos.y);
+        if (dx > 10 || dy > 10) touchStartedPos = null;
+      }
+
+      if (!activeColumn || (!isDragging && !isResizing)) return;
+      if (e.pointerType === 'touch' && !isResizing && !isDragging) return;
+
+      const slots = activeColumn.querySelector('.day-slots');
+      const rect = slots.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+
+      if (isResizing) {
+        e.preventDefault();
+        const snappedY = Math.round((y - GRID_OFFSET) / SLOT_HEIGHT) * SLOT_HEIGHT + GRID_OFFSET;
+        if (isResizing === 'top') {
+          updateSelectionBox(Math.min(snappedY, activeSelection.endY - SLOT_HEIGHT), activeSelection.endY);
+        } else {
+          updateSelectionBox(activeSelection.startY, Math.max(snappedY, activeSelection.startY + SLOT_HEIGHT));
+        }
+      } else if (isDragging) {
+        e.preventDefault();
+        // Snapping refinement: 15-minute segments (SLOT_HEIGHT)
+        const currentSnapY = Math.round((y - GRID_OFFSET) / SLOT_HEIGHT) * SLOT_HEIGHT + GRID_OFFSET;
+
+        // Expand from initial hour
+        const newStart = Math.min(dragStartY, currentSnapY);
+        const newEnd = Math.max(dragStartY + HOUR_HEIGHT, currentSnapY);
+        updateSelectionBox(newStart, newEnd);
+      }
+    };
+
+    const onPointerUp = (e) => {
+      if (e.pointerType === 'touch' && touchStartedPos) {
+        const column = e.target.closest('.day-column');
+        const slots = column?.querySelector('.day-slots');
+        if (column && slots && slots.contains(e.target)) {
+          startSelection(e, column, slots);
+        }
+        touchStartedPos = null;
+      }
+      isDragging = false;
+      isResizing = null;
+    };
+
+    grid.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+
+    // FAB click handler
+    const fabBtn = document.getElementById('calendar-fab');
+    if (fabBtn) {
+      fabBtn.onclick = () => {
+        if (!activeSelection) return;
+        const start = getTimeFromY(activeSelection.startY);
+        const end = getTimeFromY(activeSelection.endY);
+        const dateData = {
+          date: activeSelection.colDate,
+          startTime: formatTimeStr(start),
+          endTime: formatTimeStr(end),
+          isNew: true
+        };
+        if (callbacks.onAddFromCalendar) {
+          callbacks.onAddFromCalendar(dateData);
+        }
+        clearSelection();
+      };
     }
   }
 
+  function createSelectionBox(startY, endY, column) {
+    if (activeSelection?.element) activeSelection.element.remove();
+    const box = document.createElement('div');
+    box.className = 'selection-box';
+    box.innerHTML = `
+        <div class="resize-handle top"></div>
+        <div class="resize-handle bottom"></div>
+        <div class="selection-time-label" style="position:absolute; top:-22px; left:0; font-size:11px; background:var(--primary-blue); color:white; padding:2px 6px; border-radius:4px; white-space:nowrap; z-index:30;"></div>
+      `;
+    column.querySelector('.day-slots').appendChild(box);
+    activeSelection = { startY, endY, colDate: column.dataset.date, element: box };
+    updateVisuals();
+    showFab();
+  }
+
+  function updateSelectionBox(startY, endY) {
+    if (!activeSelection) return;
+    activeSelection.startY = startY;
+    activeSelection.endY = endY;
+    updateVisuals();
+  }
+
+  function updateVisuals() {
+    if (!activeSelection?.element) return;
+    const { startY, endY, element } = activeSelection;
+    element.style.top = `${startY}px`;
+    element.style.height = `${endY - startY}px`;
+    const start = getTimeFromY(startY);
+    const end = getTimeFromY(endY);
+    element.querySelector('.selection-time-label').textContent = `${formatTimeStr(start)} - ${formatTimeStr(end)}`;
+  }
+
+  function showFab() {
+    const fab = document.getElementById('calendar-fab');
+    if (fab) fab.classList.remove('hidden');
+  }
+
+  function hideFab() {
+    const fab = document.getElementById('calendar-fab');
+    if (fab) fab.classList.add('hidden');
+  }
+
+  function clearSelection() {
+    if (activeSelection?.element) activeSelection.element.remove();
+    activeSelection = null;
+    hideFab();
+  }
+
   render();
-}
-
-/**
- * Render a single day column with items
- */
-function renderDayColumn(day, items, trip) {
-  const tripStart = new Date(trip.startDate + 'T00:00:00');
-  const tripEnd = new Date(trip.endDate + 'T00:00:00');
-
-  const isInTrip = day >= tripStart && day <= tripEnd;
-  const isToday = isSameDay(day, new Date());
-
-  const dayStr = day.toISOString().split('T')[0];
-  const dow = day.toLocaleDateString('en-US', { weekday: 'short' });
-  const dateNum = day.getDate();
-
-  // Filter items for this day
-  const dayItems = items.filter(item => {
-    if (!item.startTime) return false;
-    const itemDate = new Date(item.startTime).toISOString().split('T')[0];
-    return itemDate === dayStr;
-  });
-
-  // Render items
-  const itemsHtml = dayItems.map(item => {
-    const start = new Date(item.startTime);
-    const end = item.endTime ? new Date(item.endTime) : new Date(start.getTime() + 60 * 60 * 1000);
-
-    const startMinutes = start.getHours() * 60 + start.getMinutes();
-    const endMinutes = end.getHours() * 60 + end.getMinutes();
-    const duration = Math.max(30, endMinutes - startMinutes);
-
-    const top = startMinutes + 52; // Header offset (matches HEADER_HEIGHT in drag handlers)
-
-    const formatItemTime = (d) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-
-    return `
-      <div class="timeline-item ${item.type}" 
-           data-id="${item.id}" 
-           data-type="${item.type}"
-           style="top: ${top}px; height: ${duration}px;">
-        <div class="item-title">${item.title}</div>
-        <div class="item-time">${formatItemTime(start)}</div>
-      </div>
-    `;
-  }).join('');
-
-  return `
-    <div class="day-column ${isInTrip ? '' : 'out-of-trip'}" data-date="${dayStr}">
-      <div class="day-header ${isToday ? 'today' : ''}">
-        <div class="day-header-dow">${dow}</div>
-        <div class="day-header-date">${dateNum}</div>
-      </div>
-      ${itemsHtml}
-    </div>
-  `;
-}
-
-function isSameDay(d1, d2) {
-  return d1.getFullYear() === d2.getFullYear() &&
-    d1.getMonth() === d2.getMonth() &&
-    d1.getDate() === d2.getDate();
 }

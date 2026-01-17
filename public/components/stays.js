@@ -12,19 +12,18 @@ export function renderStays(container, store, callbacks) {
 
   const stayCards = stays && stays.length > 0 ? stays.map(stay => {
     return renderItemCard(stay, 'stay');
-  }).join('') : `<div class="empty-state">
-    <div style="font-size: 3rem; margin-bottom: 1rem;">🏨</div>
-    <p>No stays added yet.</p>
+  }).join('') : `<div class="empty-state" style="text-align: center; padding: 40px 0;">
+    <p style="color: var(--text-secondary);">No stays added yet.</p>
   </div>`;
 
   container.innerHTML = `
-    <div class="tab-header">
-      <div class="tab-title">
+    <div class="tab-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+      <div class="tab-title" style="display: flex; align-items: center; gap: 12px;">
         <span style="font-size: 1.5rem;">🏨</span>
-        <h2>Stays</h2>
+        <h2 style="margin: 0;">Stays</h2>
       </div>
       ${callbacks ? `
-        <button class="btn-primary" id="add-stay-btn">➕ Add Stay</button>
+        <button class="btn-primary-compact" id="add-stay-btn" title="Add Stay">➕</button>
       ` : ''}
     </div>
     ${stayCards}
@@ -45,6 +44,18 @@ export function renderStays(container, store, callbacks) {
         callbacks.onAdd('stays');
       });
     }
+
+    // View Details on Card Click
+    container.querySelectorAll('.unified-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.btn-action') || e.target.closest('a')) return;
+        const id = card.dataset.id;
+        const stay = stays.find(s => s.id === id);
+        if (stay && callbacks.onView) {
+          callbacks.onView('stay', stay);
+        }
+      });
+    });
   }
 }
 
@@ -52,7 +63,18 @@ export function renderStayForm(stay = null) {
   const isEdit = !!stay;
   const allTravelerIds = window.store?.getActiveTrip()?.travelers.map(t => t.id) || [];
 
-  const data = stay || {
+  const data = stay ? {
+    type: stay.type || 'hotel',
+    name: stay.title || stay.name || '',
+    address: stay.address || '',
+    checkIn: stay.isNew ? `${stay.date}T${stay.startTime || '00:00'}` : (stay.startAt || stay.checkIn || ''),
+    checkOut: stay.isNew ? `${stay.date}T${stay.endTime || '23:59'}` : (stay.endAt || stay.checkOut || ''),
+    amenities: stay.amenities || [],
+    cost: stay.cost || { amount: 0, currency: 'USD', perNight: 0 },
+    notes: stay.notes || '',
+    travelers: stay.travelers || allTravelerIds,
+    paidBy: stay.paidBy || stay.cost?.paidBy || ''
+  } : {
     type: 'hotel',
     name: '',
     address: '',
@@ -62,7 +84,7 @@ export function renderStayForm(stay = null) {
     cost: { amount: 0, currency: 'USD', perNight: 0 },
     notes: '',
     travelers: allTravelerIds,
-    paidBy: stay?.paidBy || ''
+    paidBy: ''
   };
 
   const renderImportZone = () => {
@@ -83,6 +105,26 @@ export function renderStayForm(stay = null) {
       </div>
       <div class="form-divider"><span>OR ENTER MANUALLY</span></div>
     `;
+  };
+
+  /* Robust Date Formatter using Trip Timezone */
+  const formatDateForInput = (dateStr) => {
+    if (!dateStr) return '';
+    // If it's already in the correct format from pre-fill (YYYY-MM-DDTHH:mm), return it
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dateStr)) return dateStr;
+
+    const trip = window.store?.getActiveTrip();
+    const timezone = trip?.timezone || 'UTC';
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return '';
+      const fmt = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: timezone });
+      const parts = fmt.formatToParts(date);
+      const getPart = (type) => parts.find(p => p.type === type)?.value;
+      return `${getPart('year')}-${getPart('month')}-${getPart('day')}T${getPart('hour')}:${getPart('minute')}`;
+    } catch (e) {
+      return dateStr ? new Date(dateStr).toISOString().slice(0, 16) : '';
+    }
   };
 
   return `
@@ -114,11 +156,11 @@ export function renderStayForm(stay = null) {
         <div class="form-row">
             <div class="form-group">
                 <label for="checkIn">Check In</label>
-                <input type="date" name="checkIn" value="${data.checkIn ? data.checkIn.split('T')[0] : ''}" required>
+                <input type="datetime-local" name="checkIn" value="${formatDateForInput(data.checkIn)}" required>
             </div>
             <div class="form-group">
                 <label for="checkOut">Check Out</label>
-                <input type="date" name="checkOut" value="${data.checkOut ? data.checkOut.split('T')[0] : ''}" required>
+                <input type="datetime-local" name="checkOut" value="${formatDateForInput(data.checkOut)}" required>
             </div>
         </div>
 
