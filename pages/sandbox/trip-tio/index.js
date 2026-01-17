@@ -63,6 +63,7 @@ export default function TripTioSandbox() {
     const [previews, setPreviews] = useState([]);
     const [selectedPreview, setSelectedPreview] = useState(null);
     const [itinerary, setItinerary] = useState([]);
+    const [selectedItemIds, setSelectedItemIds] = useState(new Set()); // Added missing state
 
     // Refs for scrolling
     const containerRef = useRef(null);
@@ -194,9 +195,23 @@ export default function TripTioSandbox() {
 
     const selectPreview = (preview) => {
         setSelectedPreview(preview);
-        // New structure: "items" array content
-        setItinerary(preview.items || []);
+        const items = preview.items || [];
+        setItinerary(items);
+        // Select all by default. Using index as ID if no ID provided, but items usually don't have IDs in the current mock?
+        // Let's assume we use index if title is not unique, but title should be unique enough for this demo.
+        // Actually, let's just use index for simplicity in this sandbox.
+        setSelectedItemIds(new Set(items.map((_, i) => i)));
         setStep("ITINERARY");
+    };
+
+    const toggleItem = (index) => {
+        const newSet = new Set(selectedItemIds);
+        if (newSet.has(index)) {
+            newSet.delete(index);
+        } else {
+            newSet.add(index);
+        }
+        setSelectedItemIds(newSet);
     };
 
     // --- Mobile Swiper Logic ---
@@ -541,21 +556,43 @@ export default function TripTioSandbox() {
                         <p style={{ marginBottom: '20px', color: '#7f8c8d' }}>Included Experiences:</p>
 
                         <div className={styles.itineraryList}>
-                            {itinerary.map((item, idx) => (
-                                <div key={idx} className={styles.dayItem} style={{ alignItems: 'center' }}>
-                                    <div className={styles.itemIcon}>
-                                        {item.category === 'Dining' && '🍽️'}
-                                        {item.category === 'Activity' && '🎯'}
-                                        {item.category === 'Chill' && '☕'}
-                                        {item.category === 'Nightlife' && '🍸'}
-                                        {!['Dining', 'Activity', 'Chill', 'Nightlife'].includes(item.category) && '📍'}
+                            {itinerary.map((item, idx) => {
+                                const isSelected = selectedItemIds.has(idx);
+                                return (
+                                    <div
+                                        key={idx}
+                                        className={styles.dayItem}
+                                        style={{ alignItems: 'center', cursor: 'pointer', opacity: isSelected ? 1 : 0.6, transition: 'all 0.2s' }}
+                                        onClick={() => toggleItem(idx)}
+                                    >
+                                        <div style={{ marginRight: '15px' }}>
+                                            <div style={{
+                                                width: '24px', height: '24px', borderRadius: '50%',
+                                                border: isSelected ? 'none' : '2px solid #cbd5e1',
+                                                background: isSelected ? '#2c3e50' : 'white',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                color: 'white', fontSize: '14px'
+                                            }}>
+                                                {isSelected && '✓'}
+                                            </div>
+                                        </div>
+                                        <div className={styles.itemIcon}>
+                                            {item.category === 'Dining' ? '🍽️' :
+                                                item.category === 'Activity' ? '🎟️' :
+                                                    item.category === 'Chill' ? '☕' : '✨'}
+                                        </div>
+                                        <div className={styles.itemContent}>
+                                            <div className={styles.itemTitle}>{item.title} <span style={{ fontSize: '0.8em', color: '#95a5a6', marginLeft: '5px' }}>({item.duration})</span></div>
+                                            <div className={styles.itemNotes}>{item.description}</div>
+                                        </div>
                                     </div>
-                                    <div className={styles.itemContent}>
-                                        <div className={styles.itemTitle}>{item.title} <span style={{ fontSize: '0.8em', color: '#95a5a6', marginLeft: '5px' }}>({item.duration})</span></div>
-                                        <div className={styles.itemNotes}>{item.description}</div>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
+                        </div>
+
+                        <div style={{ marginTop: '30px', display: 'flex', gap: '10px' }}>
+                            <button className={styles.secondaryButton} onClick={() => setStep("PREVIEWS")}>Back</button>
+                            <button className={styles.button} disabled={selectedItemIds.size === 0} onClick={() => setStep("IMPORT_REVIEW")}>Next: Review</button>
                         </div>
                     </div>
                 )}

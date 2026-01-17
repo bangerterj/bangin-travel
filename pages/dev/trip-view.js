@@ -129,7 +129,7 @@ export default function TripViewSandbox() {
     return (
         <div className="trip-view">
             <Head>
-                <title>Unified Trip View | Bangin' Travel</title>
+                <title>Unified Trip View | TRIPT.IO</title>
                 <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;700&family=Outfit:wght@500;700&display=swap" rel="stylesheet" />
             </Head>
 

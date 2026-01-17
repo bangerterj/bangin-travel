@@ -635,7 +635,7 @@ export default function LocationSandbox() {
   return (
     <>
       <Head>
-        <title>Location Sandbox | Bangin' Travel</title>
+        <title>Location Sandbox | TRIPT.IO</title>
       </Head>
 
       <div className="location-sandbox">

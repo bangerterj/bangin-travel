@@ -7,8 +7,8 @@ export default async function handler(req, res) {
     const genAI = process.env.GEMINI_API_KEY
         ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
         : null;
-    // Using gemini-pro for stability
-    const model = genAI ? genAI.getGenerativeModel({ model: "gemini-pro" }) : null;
+    // Using gemini-2.0-flash (Confirmed available via API list)
+    const model = genAI ? genAI.getGenerativeModel({ model: "gemini-2.0-flash" }) : null;
 
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method Not Allowed' });
@@ -45,7 +45,8 @@ export default async function handler(req, res) {
                 return res.status(200).json({ insight });
             } catch (error) {
                 console.error("Gemini Insight Error Stack:", error);
-                return res.status(200).json({ insight: `It's going to be a great time to visit ${destination}!` });
+                // DEBUG: Return error to UI
+                return res.status(200).json({ insight: `AI Error: ${error.message}` });
             }
         }
 

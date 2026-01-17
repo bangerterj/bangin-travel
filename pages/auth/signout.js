@@ -11,7 +11,7 @@ export default function SignOut() {
     return (
         <div className="auth-container">
             <div className="auth-card">
-                <h1>🚐 Bangin' Travel</h1>
+                <h1>🚐 TRIPT.IO</h1>
                 <h2>Are you sure?</h2>
                 <p className="text-secondary">We'll miss you. Come back soon for more bangin' adventures!</p>
 

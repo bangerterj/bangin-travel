@@ -51,7 +51,7 @@ export function renderTripSelector(container, store, callbacks) {
     <div class="trips-container">
       <div class="trips-header">
         <div class="header-top" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-            <h1 class="brand-title">🚐 Bangin' Travel</h1>
+            <h1 class="brand-title">🚐 TRIPT.IO</h1>
             <div class="auth-controls">
                 ${store.getSession() ? `
                     <button class="btn-text btn-sm" id="account-settings-btn" style="margin-right: 10px; font-weight: bold;">⚙️ Account Settings</button>

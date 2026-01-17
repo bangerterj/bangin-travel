@@ -69,7 +69,7 @@ export const authOptions = {
                     pass: process.env.RESEND_API_KEY,
                 },
             },
-            from: process.env.EMAIL_FROM || "Bangin' Travel <onboarding@resend.dev>",
+            from: process.env.EMAIL_FROM || "TRIPT.IO <onboarding@resend.dev>",
             sendVerificationRequest: async ({ identifier: email, url, provider }) => {
                 try {
                     console.log("[AUTH] Sending verification email to:", email);
@@ -78,11 +78,11 @@ export const authOptions = {
                     const result = await transport.sendMail({
                         to: email,
                         from: provider.from,
-                        subject: "🚐 Sign in to Bangin' Travel",
-                        text: `Sign in to Bangin' Travel\n\nClick the link below to sign in:\n${url}\n\nIf you didn't request this email, you can safely ignore it.`,
+                        subject: "🚐 Sign in to TRIPT.IO",
+                        text: `Sign in to TRIPT.IO\n\nClick the link below to sign in:\n${url}\n\nIf you didn't request this email, you can safely ignore it.`,
                         html: `
                             <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
-                                <h1 style="color: #333; font-size: 24px;">🚐 Bangin' Travel</h1>
+                                <h1 style="color: #333; font-size: 24px;">🚐 TRIPT.IO</h1>
                                 <p style="color: #666; font-size: 16px; line-height: 1.5;">
                                     Click the button below to sign in to your account.
                                 </p>

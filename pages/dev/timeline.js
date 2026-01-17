@@ -1111,7 +1111,7 @@ export default function TimelineSandbox() {
   return (
     <>
       <Head>
-        <title>Timeline Sandbox | Bangin' Travel</title>
+        <title>Timeline Sandbox | TRIPT.IO</title>
       </Head>
 
       <div className="timeline-sandbox">

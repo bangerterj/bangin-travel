@@ -1,9 +1,10 @@
+require('dotenv').config({ path: '.env.local' });
 const { getPool } = require('./lib/db');
 
 async function checkUser() {
     const pool = getPool();
     try {
-        const email = 'jeffbangerter1@gmail.com'; // Update if different
+        const email = 'test_prod_check@example.com'; // Update if different
         const result = await pool.query(
             'SELECT id, email, name, password_hash FROM users WHERE email ILIKE $1',
             [email]
@@ -25,7 +26,7 @@ async function checkUser() {
             console.log('\nUser NOT found in database');
             console.log('\nAll users in database:');
             const allUsers = await pool.query('SELECT email, name FROM users');
-            console.table(allUsers.rows);
+            console.log('All Users:', allUsers.rows.map(u => u.email));
         }
     } catch (err) {
         console.error('Error:', err);

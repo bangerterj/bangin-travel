@@ -416,7 +416,7 @@ class App {
             this.showView('trips'); // Use trips container for login prompt
             this.tripsContainer.innerHTML = `
                 <div class="login-prompt">
-                    <h2>🚐 Welcome to Bangin' Travel</h2>
+                    <h2>🚐 Welcome to TRIPT.IO</h2>
                     <p>Sign in to view and manage your trips.</p>
                     <a href="/api/auth/signin" class="btn btn-primary">
                         Log In / Sign Up

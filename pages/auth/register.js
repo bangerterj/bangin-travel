@@ -59,7 +59,7 @@ export default function Register() {
     return (
         <div className="auth-container">
             <div className="auth-card">
-                <h1>🚐 Bangin' Travel</h1>
+                <h1>🚐 TRIPT.IO</h1>
                 <p>Create a new account</p>
 
                 <form onSubmit={handleRegister}>

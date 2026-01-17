@@ -50,12 +50,12 @@ export default async function handler(req, res) {
             });
 
             await transporter.sendMail({
-                from: process.env.EMAIL_FROM || "Bangin' Travel <onboarding@resend.dev>",
+                from: process.env.EMAIL_FROM || "TRIPT.IO <onboarding@resend.dev>",
                 to: email,
                 subject: `🚐 You've been invited to join ${trip.name}!`,
                 html: `
                     <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
-                        <h1 style="color: #333; font-size: 24px;">🚐 Bangin' Travel</h1>
+                        <h1 style="color: #333; font-size: 24px;">🚐 TRIPT.IO</h1>
                         <p style="color: #666; font-size: 16px; line-height: 1.5;">
                             <strong>${session.user.name || session.user.email}</strong> has invited you to collaborate on the trip <strong>${trip.name}</strong>.
                         </p>
