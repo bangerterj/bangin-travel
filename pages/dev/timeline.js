@@ -264,23 +264,18 @@ function DraftItem({ startY, endY }) {
   const top = Math.min(startY, endY);
   const height = Math.max(Math.abs(endY - startY), SLOT_HEIGHT);
 
-  const startTime = getTimeFromY(top);
-  const endTime = getTimeFromY(top + height);
-
   return (
     <div
       className="timeline-draft"
       style={{
         top: `${top}px`,
         height: `${height}px`,
+        background: 'rgba(52, 152, 219, 0.1)',
+        border: '2px solid #3498db',
+        borderRadius: '6px',
+        zIndex: 15,
       }}
-    >
-      <div className="timeline-draft-content">
-        <span className="timeline-draft-time">
-          {formatTime(startTime.hours, startTime.minutes)} - {formatTime(endTime.hours, endTime.minutes)}
-        </span>
-      </div>
-    </div>
+    />
   );
 }
 
@@ -460,61 +455,155 @@ function AddItemModal({ isOpen, onClose, onSave, onDelete, initialTime, editingI
 
 // ============================================
 // Day Column Component (no hour labels - those are in sidebar)
+// Phase 4: Tap-Select-Refine Creation
 // ============================================
-function DayColumn({ date, items, onDragCreate, onEditItem }) {
+function DayColumn({ date, items, onDragCreate, onEditItem, onDaySelect, isFullWidth, activeSelection, onSelectionChange }) {
   const columnRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState(null);
   const [dragEnd, setDragEnd] = useState(null);
 
+  // Phase 4: Selection state controlled by parent
+  const [isResizing, setIsResizing] = useState(null); // 'top' | 'bottom' | null
+  const resizeStartY = useRef(null);
+
   const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const dayItems = useMemo(() => getItemsForDay(items, dayStart), [items, dayStart]);
+
+  // Handle tap to create selection (Phase 4)
+  const handleTap = (e) => {
+    // Fix: Use currentTarget (day-slots) for correct relative coordinates
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+
+    // Create a default 1-hour selection starting at tapped position
+    const snappedY = Math.floor(y / (HOUR_HEIGHT / 4)) * (HOUR_HEIGHT / 4);
+
+    if (onSelectionChange) {
+      onSelectionChange({
+        startY: snappedY,
+        endY: snappedY + HOUR_HEIGHT
+      }, false); // isResize = false
+    }
+  };
 
   const handlePointerDown = (e) => {
     if (e.button !== 0) return;
 
-    const rect = columnRef.current.getBoundingClientRect();
-    const y = e.clientY - rect.top + columnRef.current.scrollTop;
+    // Fix: Use currentTarget (day-slots) rect
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
 
+    // If clicking on an existing selection, check for resize handles
+    if (activeSelection) {
+      const handleZone = 40; // Increased hit zone for better touch capability
+      const distTop = Math.abs(y - activeSelection.startY);
+      const distBottom = Math.abs(y - activeSelection.endY);
+
+      // Check if clicking near any handle
+      if (distTop < handleZone || distBottom < handleZone) {
+        // Pick the closest handle
+        if (distTop <= distBottom) {
+          setIsResizing('top');
+          resizeStartY.current = y;
+          e.preventDefault();
+          return;
+        } else {
+          setIsResizing('bottom');
+          resizeStartY.current = y;
+          e.preventDefault();
+          return;
+        }
+      }
+
+      // If clicking elsewhere while valid selection exists in this column:
+      // Clear selection and STOP. (Do not start dragging a new one)
+      const min = Math.min(activeSelection.startY, activeSelection.endY);
+      const max = Math.max(activeSelection.startY, activeSelection.endY);
+      if (y < min || y > max) {
+        if (onSelectionChange) onSelectionChange(null);
+        e.preventDefault();
+        return;
+      }
+
+      // If clicking inside, consume event (or allow handle check above to have caught it)
+      e.preventDefault();
+      return;
+    }
+
+    // Otherwise, start drag-to-create
     setIsDragging(true);
     setDragStart(y);
     setDragEnd(y);
 
     if (e.pointerId) {
-      columnRef.current.setPointerCapture(e.pointerId);
+      e.currentTarget.setPointerCapture(e.pointerId);
     }
     e.preventDefault();
   };
 
   const handlePointerMove = (e) => {
-    if (!isDragging) return;
-
-    const rect = columnRef.current.getBoundingClientRect();
+    // Fix: Use currentTarget (day-slots) rect
+    const rect = e.currentTarget.getBoundingClientRect();
     const maxY = (END_HOUR - START_HOUR) * HOUR_HEIGHT + GRID_OFFSET;
-    const y = Math.max(0, Math.min(e.clientY - rect.top + columnRef.current.scrollTop, maxY));
+    const y = Math.max(0, Math.min(e.clientY - rect.top, maxY));
 
+    // Handle resize
+    if (isResizing && activeSelection && onSelectionChange) {
+      const snappedY = Math.round(y / (HOUR_HEIGHT / 4)) * (HOUR_HEIGHT / 4);
+      if (isResizing === 'top') {
+        onSelectionChange({
+          ...activeSelection,
+          startY: Math.min(snappedY, activeSelection.endY - HOUR_HEIGHT / 4)
+        }, true); // isResize = true
+      } else if (isResizing === 'bottom') {
+        onSelectionChange({
+          ...activeSelection,
+          endY: Math.max(snappedY, activeSelection.startY + HOUR_HEIGHT / 4)
+        }, true); // isResize = true
+      }
+      return;
+    }
+
+    // Handle drag-to-create
+    if (!isDragging) return;
     setDragEnd(y);
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e) => {
+    // End resize
+    if (isResizing) {
+      setIsResizing(null);
+      resizeStartY.current = null;
+      return;
+    }
+
     if (!isDragging) return;
 
     const startTime = getTimeFromY(Math.min(dragStart, dragEnd));
     const endTime = getTimeFromY(Math.max(dragStart, dragEnd));
 
     const durationMinutes = (endTime.hours - startTime.hours) * 60 + (endTime.minutes - startTime.minutes);
-    if (durationMinutes >= SNAP_MINUTES) {
-      onDragCreate({
-        date,
-        startTime: `${String(startTime.hours).padStart(2, '0')}:${String(startTime.minutes).padStart(2, '0')}`,
-        endTime: `${String(endTime.hours).padStart(2, '0')}:${String(endTime.minutes).padStart(2, '0')}`,
-      });
+
+    // If it was a tap (very small drag), create a selection instead
+    if (durationMinutes < SNAP_MINUTES) {
+      handleTap(e);
+    } else {
+      // Drag created a range - set as draft selection so drawer opens
+      if (onSelectionChange) {
+        onSelectionChange({
+          startY: Math.min(dragStart, dragEnd),
+          endY: Math.max(dragStart, dragEnd)
+        }, false); // isResize = false
+      }
     }
 
     setIsDragging(false);
     setDragStart(null);
     setDragEnd(null);
   };
+
+
 
   // Generate 15-minute slot markers (just visual lines, no labels)
   const slots = [];
@@ -528,16 +617,36 @@ function DayColumn({ date, items, onDragCreate, onEditItem }) {
   const dayNum = date.getDate();
   const monthName = date.toLocaleDateString('en-US', { month: 'short' });
 
+  // Handle header click to zoom into day
+  const handleHeaderClick = () => {
+    if (onDaySelect) {
+      onDaySelect(date);
+    }
+  };
+
+  // Format selection time for display
+  const getSelectionTimeDisplay = () => {
+    if (!selection) return '';
+    const start = getTimeFromY(selection.startY);
+    const end = getTimeFromY(selection.endY);
+    return `${formatTime(start.hours, start.minutes)} – ${formatTime(end.hours, end.minutes)}`;
+  };
+
   return (
-    <div className="day-column">
-      <div className="day-header">
+    <div className={`day-column ${isFullWidth ? 'full-width' : ''}`}>
+      <div
+        className={`day-header ${onDaySelect ? 'clickable' : ''}`}
+        onClick={handleHeaderClick}
+        title={onDaySelect ? 'Click to zoom into this day' : ''}
+      >
         <span className="day-name">{dayName}</span>
         <span className="day-date">{monthName} {dayNum}</span>
+        {onDaySelect && <span className="zoom-hint">→</span>}
       </div>
 
       <div
         ref={columnRef}
-        className={`day-slots ${isDragging ? 'dragging' : ''}`}
+        className={`day-slots ${isDragging ? 'dragging' : ''} ${isResizing ? 'resizing' : ''}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -545,10 +654,8 @@ function DayColumn({ date, items, onDragCreate, onEditItem }) {
           setIsDragging(false);
           setDragStart(null);
           setDragEnd(null);
+          setIsResizing(null);
         }}
-        onMouseDown={handlePointerDown}
-        onMouseMove={handlePointerMove}
-        onMouseUp={handlePointerUp}
         style={{
           height: `${(END_HOUR - START_HOUR) * HOUR_HEIGHT + GRID_OFFSET}px`,
           position: 'relative',
@@ -572,6 +679,60 @@ function DayColumn({ date, items, onDragCreate, onEditItem }) {
         {/* Draft while dragging */}
         {isDragging && dragStart !== null && dragEnd !== null && (
           <DraftItem startY={dragStart} endY={dragEnd} />
+        )}
+
+        {/* Phase 4: Selection box with resize handles */}
+        {activeSelection && (
+          <div
+            className="selection-box"
+            style={{
+              position: 'absolute',
+              left: '2px',
+              right: '2px',
+              top: `${Math.min(activeSelection.startY, activeSelection.endY)}px`,
+              height: `${Math.abs(activeSelection.endY - activeSelection.startY)}px`,
+              background: 'rgba(52, 152, 219, 0.1)',
+              border: '2px solid #3498db',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              zIndex: 10,
+              pointerEvents: 'none', // Let clicks pass through to container (handlers are on container)
+            }}
+          >
+            {/* Top Handle (Circle) */}
+            <div
+              className="resize-handle top"
+              style={{
+                position: 'absolute',
+                top: '-5px',
+                left: '-5px',
+                width: '10px',
+                height: '10px',
+                background: '#3498db',
+                borderRadius: '50%',
+                cursor: 'nwse-resize',
+                pointerEvents: 'auto',
+                boxShadow: '0 0 2px white'
+              }}
+            />
+
+            {/* Bottom Handle (Circle) */}
+            <div
+              className="resize-handle bottom"
+              style={{
+                position: 'absolute',
+                bottom: '-5px',
+                right: '-5px',
+                width: '10px',
+                height: '10px',
+                background: '#3498db',
+                borderRadius: '50%',
+                cursor: 'nwse-resize',
+                pointerEvents: 'auto',
+                boxShadow: '0 0 2px white'
+              }}
+            />
+          </div>
         )}
       </div>
     </div>
@@ -606,6 +767,41 @@ function HourLabelsSidebar() {
 }
 
 // ============================================
+// Phase 4: Floating Add Button (FAB)
+// ============================================
+function FloatingAddButton({ onClick }) {
+  return (
+    <button
+      className="fab-add"
+      onClick={onClick}
+      style={{
+        position: 'fixed',
+        bottom: '32px',
+        right: '32px',
+        width: '56px',
+        height: '56px',
+        borderRadius: '50%',
+        background: '#f39c12',
+        color: 'white',
+        border: 'none',
+        boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+        fontSize: '32px',
+        cursor: 'pointer',
+        zIndex: 100,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'transform 0.2s',
+      }}
+      onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+      onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+    >
+      +
+    </button>
+  );
+}
+
+// ============================================
 // Main Timeline Page
 // ============================================
 export default function TimelineSandbox() {
@@ -616,10 +812,83 @@ export default function TimelineSandbox() {
   const [timezone] = useState(DEFAULT_TIMEZONE);
   const [weekOffset, setWeekOffset] = useState(0);
 
-  // Generate 7 days based on week offset
+  // New: View mode state ('week' | 'day')
+  const [viewMode, setViewMode] = useState('week');
+  const [selectedDay, setSelectedDay] = useState(null); // For Day View
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Phase 4: Tap-to-Create Selection State
+  const [draftSelection, setDraftSelection] = useState(null); // { date, startY, endY }
+
+  // Handle selection change from DayColumn
+  const handleSelectionChange = useCallback((newSelection, date, isResize = false) => {
+    if (newSelection === null) {
+      setDraftSelection(null);
+    } else {
+      // If we are tapping (not resizing) and we already have a selection:
+      // The user wants to "Exit" the current selection.
+      if (draftSelection && !isResize) {
+        setDraftSelection(null);
+        return;
+      }
+
+      setDraftSelection({
+        ...newSelection,
+        date
+      });
+    }
+  }, [draftSelection]);
+
+  // Open modal from drawer
+  const handleDrawerSave = useCallback(() => {
+    if (!draftSelection) return;
+
+    const startTime = getTimeFromY(draftSelection.startY);
+    const endTime = getTimeFromY(draftSelection.endY);
+
+    setPendingCreate({
+      date: draftSelection.date.toISOString().split('T')[0],
+      start: `${String(startTime.hours).padStart(2, '0')}:${String(startTime.minutes).padStart(2, '0')}`,
+      end: `${String(endTime.hours).padStart(2, '0')}:${String(endTime.minutes).padStart(2, '0')}`,
+    });
+    setEditingItem(null);
+    setModalOpen(true);
+    setDraftSelection(null);
+  }, [draftSelection]);
+
+  // Base date for the trip (Monday Jan 19, 2026)
+  const baseDate = useMemo(() => new Date(2026, 0, 19), []);
+
+  // Phase 3: Responsive defaults - detect viewport and auto-switch on mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 600;
+      setIsMobile(mobile);
+
+      // Auto-switch to Day View on mobile if in Week View and no day selected yet
+      if (mobile && viewMode === 'week' && !selectedDay) {
+        // Default to first day of current week
+        const start = new Date(baseDate);
+        start.setDate(baseDate.getDate() + (weekOffset * 7));
+        setSelectedDay(start);
+        setViewMode('day');
+      }
+    };
+
+    // Check on mount
+    checkMobile();
+
+    // Listen for resize
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []); // Only run on mount
+
+  // Generate days based on view mode
   const days = useMemo(() => {
-    // Base date: Monday Jan 19, 2026
-    const baseDate = new Date(2026, 0, 19);
+    if (viewMode === 'day' && selectedDay) {
+      return [selectedDay];
+    }
+    // Week view: 7 days based on week offset
     const start = new Date(baseDate);
     start.setDate(baseDate.getDate() + (weekOffset * 7));
 
@@ -627,11 +896,111 @@ export default function TimelineSandbox() {
     end.setDate(start.getDate() + 6); // 7 days total (Mon-Sun)
 
     return getDaysBetween(start, end);
-  }, [weekOffset]);
+  }, [viewMode, selectedDay, weekOffset, baseDate]);
 
-  const handlePrevWeek = () => setWeekOffset(prev => prev - 1);
-  const handleNextWeek = () => setWeekOffset(prev => prev + 1);
-  const handleToday = () => setWeekOffset(0);
+  // Format the header title based on view mode
+  const headerTitle = useMemo(() => {
+    if (viewMode === 'day' && selectedDay) {
+      return selectedDay.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric'
+      });
+    }
+    // Week view: show date range
+    if (days.length > 0) {
+      const start = days[0];
+      const end = days[days.length - 1];
+      const startStr = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const endStr = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return `${startStr} – ${endStr}`;
+    }
+    return '';
+  }, [viewMode, selectedDay, days]);
+
+  // Navigation handlers
+  const handlePrev = useCallback(() => {
+    if (viewMode === 'day' && selectedDay) {
+      const newDay = new Date(selectedDay);
+      newDay.setDate(newDay.getDate() - 1);
+      setSelectedDay(newDay);
+    } else {
+      setWeekOffset(prev => prev - 1);
+    }
+  }, [viewMode, selectedDay]);
+
+  const handleNext = useCallback(() => {
+    if (viewMode === 'day' && selectedDay) {
+      const newDay = new Date(selectedDay);
+      newDay.setDate(newDay.getDate() + 1);
+      setSelectedDay(newDay);
+    } else {
+      setWeekOffset(prev => prev + 1);
+    }
+  }, [viewMode, selectedDay]);
+
+  const handleToday = useCallback(() => {
+    if (viewMode === 'day') {
+      setSelectedDay(new Date(baseDate));
+    } else {
+      setWeekOffset(0);
+    }
+  }, [viewMode, baseDate]);
+
+  // Zoom into Day View when tapping a day header
+  const handleDaySelect = useCallback((date) => {
+    setSelectedDay(new Date(date));
+    setViewMode('day');
+  }, []);
+
+  // Go back to Week View
+  const handleBackToWeek = useCallback(() => {
+    setViewMode('week');
+    // Optionally: set weekOffset to show the week containing selectedDay
+    if (selectedDay) {
+      const daysDiff = Math.floor((selectedDay - baseDate) / (1000 * 60 * 60 * 24));
+      setWeekOffset(Math.floor(daysDiff / 7));
+    }
+  }, [selectedDay, baseDate]);
+
+  // ============================================
+  // Phase 2: Swipe Navigation
+  // ============================================
+  const touchStartX = useRef(null);
+  const touchStartY = useRef(null);
+  const swipeThreshold = 50; // minimum px to trigger swipe
+
+  const handleTouchStart = useCallback((e) => {
+    if (e.touches.length === 1) {
+      touchStartX.current = e.touches[0].clientX;
+      touchStartY.current = e.touches[0].clientY;
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback((e) => {
+    if (touchStartX.current === null) return;
+
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+
+    const deltaX = touchEndX - touchStartX.current;
+    const deltaY = touchEndY - touchStartY.current;
+
+    // Only trigger swipe if horizontal movement is greater than vertical
+    // and exceeds threshold
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > swipeThreshold) {
+      if (deltaX > 0) {
+        // Swipe right → go to previous
+        handlePrev();
+      } else {
+        // Swipe left → go to next
+        handleNext();
+      }
+    }
+
+    touchStartX.current = null;
+    touchStartY.current = null;
+  }, [handlePrev, handleNext]);
 
   const handleDragCreate = useCallback(({ date, startTime, endTime }) => {
     setPendingCreate({
@@ -721,22 +1090,50 @@ export default function TimelineSandbox() {
       <div className="timeline-sandbox">
         <header className="sandbox-header">
           <h1>🧪 Timeline Sandbox</h1>
+
+          {/* Navigation Controls */}
           <div className="nav-controls">
-            <button onClick={handlePrevWeek}>&lt; Prev Week</button>
-            <button onClick={handleToday}>Today</button>
-            <button onClick={handleNextWeek}>Next Week &gt;</button>
-            <button onClick={handleStressTest} style={{ marginLeft: '12px', background: '#ffeaa7' }}>⚡ stress</button>
+            <button onClick={handlePrev}>
+              &lt; {viewMode === 'day' ? 'Prev Day' : 'Prev Week'}
+            </button>
+            <span className="nav-title">{headerTitle}</span>
+            <button onClick={handleNext}>
+              {viewMode === 'day' ? 'Next Day' : 'Next Week'} &gt;
+            </button>
           </div>
+
+          {/* Back to Week button (Day View only) */}
+          {viewMode === 'day' && (
+            <button className="back-to-week" onClick={handleBackToWeek}>
+              ↩ Back to Week
+            </button>
+          )}
+
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', marginTop: '10px' }}>
-            <p style={{ margin: 0 }}>Drag to create. Click to edit.</p>
+            <p style={{ margin: 0 }}>
+              {viewMode === 'week' ? 'Tap day header to zoom. ' : ''}
+              Drag to create. Click to edit.
+            </p>
             <div className="timezone-display">🌍 {timezone}</div>
+            <button onClick={handleStressTest} style={{ background: '#ffeaa7', border: '2px solid #2c3e50', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}>⚡ stress</button>
           </div>
         </header>
 
-        <div className="timeline-wrapper">
+        <div
+          className="timeline-wrapper"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
           <HourLabelsSidebar />
           <div className="timeline-container">
-            <div className="timeline-grid">
+            <div
+              className="timeline-grid"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: viewMode === 'day' ? '1fr' : 'repeat(7, 1fr)',
+                width: '100%'
+              }}
+            >
               {days.map((day) => (
                 <DayColumn
                   key={day.toISOString()}
@@ -744,11 +1141,25 @@ export default function TimelineSandbox() {
                   items={items}
                   onDragCreate={handleDragCreate}
                   onEditItem={handleEdit}
+                  onDaySelect={viewMode === 'week' ? handleDaySelect : null}
+                  isFullWidth={viewMode === 'day'}
+                  activeSelection={
+                    draftSelection &&
+                      day.toISOString().split('T')[0] === draftSelection.date.toISOString().split('T')[0]
+                      ? draftSelection
+                      : null
+                  }
+                  onSelectionChange={(sel, isResize) => handleSelectionChange(sel, day, isResize)}
                 />
               ))}
             </div>
           </div>
         </div>
+
+        {/* Floating Add Button */}
+        {draftSelection && (
+          <FloatingAddButton onClick={handleDrawerSave} />
+        )}
 
         <AddItemModal
           isOpen={modalOpen}
@@ -827,6 +1238,43 @@ export default function TimelineSandbox() {
           color: var(--text-secondary, #5d6d7e);
         }
         
+        /* View Toggle */
+        .view-toggle {
+          display: inline-flex;
+          background: var(--cream, #f8f4eb);
+          border: 2px solid var(--border-color, #2c3e50);
+          border-radius: 8px;
+          overflow: hidden;
+          margin-bottom: 12px;
+        }
+        /* Nav Title */
+        .nav-title {
+          padding: 6px 20px;
+          font-weight: 700;
+          font-size: 1rem;
+          color: var(--text-primary, #2c3e50);
+          min-width: 180px;
+          text-align: center;
+        }
+        
+        /* Back to Week button */
+        .back-to-week {
+          margin-top: 8px;
+          background: var(--cream, #f8f4eb);
+          border: 2px solid var(--border-color, #2c3e50);
+          padding: 6px 16px;
+          border-radius: 20px;
+          font-family: inherit;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        
+        .back-to-week:hover {
+          background: var(--border-color, #2c3e50);
+          color: white;
+        }
+        
         /* Timeline Wrapper - contains sidebar + grid */
         .timeline-wrapper {
           display: flex;
@@ -835,52 +1283,66 @@ export default function TimelineSandbox() {
           border-radius: var(--radius-retro, 12px);
           box-shadow: 6px 6px 0 0 var(--border-color, #2c3e50);
           overflow: hidden;
+          width: 100%; /* Constrain to parent */
+          max-width: 100%; /* Prevent overflow */
         }
         
         /* Hour Labels Sidebar */
         :global(.hour-sidebar) {
-          flex: 0 0 60px;
+          flex: 0 0 50px; /* Slightly narrower */
           background: var(--cream, #f8f4eb);
           border-right: 2px solid var(--border-color, #2c3e50);
         }
         
         :global(.hour-sidebar-header) {
-          height: 56px;
+          height: 48px; /* Match day header height on mobile */
           border-bottom: 2px solid var(--border-color, #2c3e50);
         }
         
         :global(.hour-sidebar-content) {
           position: relative;
+          overflow: hidden;
         }
         
         :global(.hour-label) {
           position: absolute;
           left: 0;
           right: 0;
-          padding: 2px 8px;
-          font-size: 0.75rem;
+          padding: 0 6px;
+          font-size: 0.65rem;
           font-weight: 600;
           color: var(--text-secondary, #5d6d7e);
           text-align: right;
           transform: translateY(-50%);
+          white-space: nowrap;
         }
         
-        /* Timeline Container */
+        /* Responsive hour sidebar */
+        @media (max-width: 600px) {
+          :global(.hour-sidebar) {
+            flex: 0 0 40px;
+          }
+          
+          :global(.hour-label) {
+            font-size: 0.55rem;
+            padding: 0 4px;
+          }
+        }
+        
+        /* Timeline Container - must constrain grid width */
         .timeline-container {
           flex: 1;
-          overflow-x: auto;
+          overflow: hidden;
+          min-width: 0; /* CRITICAL: Allow flex item to shrink below content size */
+          max-width: 100%; /* Prevent container from growing beyond parent */
         }
         
-        .timeline-grid {
-          display: flex;
-          width: 100%;
-        }
-        
-        /* Day Column */
+        /* Day Column - takes full width of grid cell */
         :global(.day-column) {
-          flex: 1;
-          min-width: 140px;
+          min-width: 0; /* Allow columns to shrink in grid */
+          width: 100%; /* Take full grid cell width */
           border-right: 1px solid var(--cream, #f8f4eb);
+          overflow: hidden;
         }
         
         :global(.day-column:last-child) {
@@ -888,13 +1350,43 @@ export default function TimelineSandbox() {
         }
         
         :global(.day-header) {
-          height: 56px;
+          height: 48px; /* Match sidebar header height */
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
           background: var(--cream, #f8f4eb);
           border-bottom: 2px solid var(--border-color, #2c3e50);
+          position: relative;
+          transition: all 0.15s;
+          padding: 4px 2px;
+        }
+        
+        :global(.day-header.clickable) {
+          cursor: pointer;
+        }
+        
+        :global(.day-header.clickable:hover) {
+          background: var(--border-color, #2c3e50);
+          color: white;
+        }
+        
+        :global(.day-header.clickable:hover .day-name),
+        :global(.day-header.clickable:hover .day-date) {
+          color: white;
+        }
+        
+        :global(.zoom-hint) {
+          position: absolute;
+          right: 8px;
+          font-size: 0.75rem;
+          opacity: 0.5;
+          transition: opacity 0.15s;
+        }
+        
+        :global(.day-header.clickable:hover .zoom-hint) {
+          opacity: 1;
+          color: white;
         }
         
         :global(.day-name) {
@@ -906,6 +1398,36 @@ export default function TimelineSandbox() {
         :global(.day-date) {
           font-size: 0.75rem;
           color: var(--text-secondary, #5d6d7e);
+        }
+        
+        /* Responsive: Compact headers on mobile */
+        @media (max-width: 768px) {
+          :global(.day-header) {
+            height: 48px;
+            padding: 4px 2px;
+          }
+          
+          :global(.day-name) {
+            font-size: 0.7rem;
+          }
+          
+          :global(.day-date) {
+            font-size: 0.6rem;
+          }
+          
+          :global(.zoom-hint) {
+            display: none; /* Hide zoom hint on mobile - tap works anyway */
+          }
+        }
+        
+        @media (max-width: 480px) {
+          :global(.day-name) {
+            font-size: 0.6rem;
+          }
+          
+          :global(.day-date) {
+            font-size: 0.55rem;
+          }
         }
         
         /* Day Slots */
@@ -1174,6 +1696,101 @@ export default function TimelineSandbox() {
         :global(.btn-save:hover) {
           transform: translate(2px, 2px);
           box-shadow: 1px 1px 0 0 var(--border-color, #2c3e50);
+        }
+
+        /* Bottom Creation Drawer */
+        :global(.creation-drawer) {
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          background: white;
+          border-top: 2px solid var(--border-color, #2c3e50);
+          border-radius: 16px 16px 0 0;
+          padding: 12px 16px 24px 16px;
+          box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+          z-index: 100;
+          animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes slideUp {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+
+        :global(.drawer-handle-bar) {
+          display: flex;
+          justify-content: center;
+          padding-bottom: 12px;
+        }
+
+        :global(.drawer-handle) {
+          width: 40px;
+          height: 4px;
+          background: #e0e0e0;
+          border-radius: 2px;
+        }
+
+        :global(.drawer-header) {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 16px;
+        }
+
+        :global(.drawer-title) {
+          font-size: 1.1rem;
+          font-weight: 700;
+          color: var(--text-dark, #2c3e50);
+        }
+
+        :global(.btn-save-drawer) {
+          padding: 8px 16px;
+          background: var(--accent-orange, #f39c12);
+          color: white;
+          border: 2px solid var(--border-color, #2c3e50);
+          border-radius: 20px;
+          font-weight: 600;
+          font-size: 0.9rem;
+          cursor: pointer;
+        }
+
+        :global(.drawer-content) {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        :global(.drawer-row) {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          color: var(--text-secondary, #5d6d7e);
+          font-size: 0.95rem;
+        }
+
+        :global(.drawer-icon) {
+          font-size: 1.2rem;
+          width: 24px;
+          text-align: center;
+        }
+
+        :global(.btn-close-drawer) {
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          width: 24px;
+          height: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #f0f0f0;
+          border: none;
+          border-radius: 50%;
+          color: #999;
+          font-size: 1.2rem;
+          cursor: pointer;
+          display: none; /* Hide close button, use tap outside or save to close */
         }
       `}</style>
     </>
