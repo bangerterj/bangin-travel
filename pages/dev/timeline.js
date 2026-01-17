@@ -1211,6 +1211,13 @@ export default function TimelineSandbox() {
           padding: var(--space-lg, 24px);
         }
         
+        /* Remove padding on mobile for edge-to-edge */
+        @media (max-width: 600px) {
+          .timeline-sandbox {
+            padding: 8px 0;
+          }
+        }
+        
         .sandbox-header {
           text-align: center;
           margin-bottom: var(--space-lg, 24px);
@@ -1348,12 +1355,12 @@ export default function TimelineSandbox() {
         /* Responsive hour sidebar */
         @media (max-width: 600px) {
           :global(.hour-sidebar) {
-            flex: 0 0 40px;
+            flex: 0 0 32px; /* Narrower on mobile */
           }
           
           :global(.hour-label) {
-            font-size: 0.55rem;
-            padding: 0 4px;
+            font-size: 0.5rem;
+            padding: 0 2px;
           }
         }
         
@@ -1368,7 +1375,7 @@ export default function TimelineSandbox() {
         
         /* Day Column - takes full width of grid cell */
         :global(.day-column) {
-          min-width: 65px; /* Ensure readability */
+          min-width: 42px; /* Compact for 7-day mobile view: (375 - 32 sidebar) / 7 ≈ 49px */
           width: 100%; /* Take full grid cell width */
           border-right: 1px solid var(--cream, #f8f4eb);
           overflow: hidden;
