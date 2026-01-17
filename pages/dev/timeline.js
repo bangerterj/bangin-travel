@@ -497,46 +497,37 @@ function DayColumn({ date, items, onDragCreate, onEditItem, onDaySelect, isFullW
     const rect = e.currentTarget.getBoundingClientRect();
     const y = e.clientY - rect.top;
 
-    // If clicking on an existing selection, check for resize handles
-    if (activeSelection) {
-      const handleZone = 40; // Increased hit zone for better touch capability
-      const distTop = Math.abs(y - activeSelection.startY);
-      const distBottom = Math.abs(y - activeSelection.endY);
+    // Check if clicking a resize handle (Robust check via DOM target)
+    if (e.target.classList.contains('resize-handle')) {
+      const isTop = e.target.classList.contains('top');
+      setIsResizing(isTop ? 'top' : 'bottom');
+      resizeStartY.current = y;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
 
-      // Check if clicking near any handle
-      if (distTop < handleZone || distBottom < handleZone) {
-        // Pick the closest handle
-        if (distTop <= distBottom) {
-          setIsResizing('top');
-          resizeStartY.current = y;
-          e.preventDefault();
-          return;
-        } else {
-          setIsResizing('bottom');
-          resizeStartY.current = y;
-          e.preventDefault();
-          return;
-        }
+    // If active selection exists:
+    if (activeSelection) {
+      // Phase 4.1: If Touch, allow native scroll (return early).
+      if (e.pointerType === 'touch') {
+        return;
       }
 
-      // If clicking elsewhere while valid selection exists in this column:
-      // Clear selection and STOP. (Do not start dragging a new one)
+      // Mouse Logic: Clear if clicking outside
       const min = Math.min(activeSelection.startY, activeSelection.endY);
       const max = Math.max(activeSelection.startY, activeSelection.endY);
       if (y < min || y > max) {
         if (onSelectionChange) onSelectionChange(null);
-        e.preventDefault();
-        return;
       }
 
-      // If clicking inside, consume event (or allow handle check above to have caught it)
+      // Consume mouse event
       e.preventDefault();
       return;
     }
 
-    // Phase 4.1: Touch Handling
+    // Phase 4.1: Touch Handling for Creation
     // If touch, DO NOT capture pointer for drag-create. Allow native scroll.
-    // "Tap to create" will be handled by onClick event which fires after pointerUp if no scroll happened.
     if (e.pointerType === 'touch') {
       return;
     }
@@ -1370,13 +1361,14 @@ export default function TimelineSandbox() {
         .timeline-container {
           flex: 1;
           overflow: hidden;
-          min-width: 0; /* CRITICAL: Allow flex item to shrink below content size */
-          max-width: 100%; /* Prevent container from growing beyond parent */
+          overflow-x: auto; /* Allow horizontal scroll for Week View on mobile */
+          min-width: 0; 
+          max-width: 100%; 
         }
         
         /* Day Column - takes full width of grid cell */
         :global(.day-column) {
-          min-width: 45px; /* Prevent collapse on very small screens in Week View */
+          min-width: 65px; /* Ensure readability */
           width: 100%; /* Take full grid cell width */
           border-right: 1px solid var(--cream, #f8f4eb);
           overflow: hidden;
