@@ -487,6 +487,9 @@ function DayColumn({ date, items, onDragCreate, onEditItem, onDaySelect, isFullW
     }
   };
 
+  // Ref to prevent double-firing taps on mouse (PointerUp + Click)
+  const ignoreNextClick = useRef(false);
+
   const handlePointerDown = (e) => {
     if (e.button !== 0) return;
 
@@ -531,7 +534,14 @@ function DayColumn({ date, items, onDragCreate, onEditItem, onDaySelect, isFullW
       return;
     }
 
-    // Otherwise, start drag-to-create
+    // Phase 4.1: Touch Handling
+    // If touch, DO NOT capture pointer for drag-create. Allow native scroll.
+    // "Tap to create" will be handled by onClick event which fires after pointerUp if no scroll happened.
+    if (e.pointerType === 'touch') {
+      return;
+    }
+
+    // Otherwise (Mouse), start drag-to-create
     setIsDragging(true);
     setDragStart(y);
     setDragEnd(y);
@@ -588,6 +598,7 @@ function DayColumn({ date, items, onDragCreate, onEditItem, onDaySelect, isFullW
     // If it was a tap (very small drag), create a selection instead
     if (durationMinutes < SNAP_MINUTES) {
       handleTap(e);
+      ignoreNextClick.current = true; // Signal handleClick to ignore this
     } else {
       // Drag created a range - set as draft selection so drawer opens
       if (onSelectionChange) {
@@ -601,6 +612,23 @@ function DayColumn({ date, items, onDragCreate, onEditItem, onDaySelect, isFullW
     setIsDragging(false);
     setDragStart(null);
     setDragEnd(null);
+  };
+
+  // Handle click for touch devices (Tap-to-create)
+  // This event fires after pointer events if no scroll/cancel occurred
+  const handleClick = (e) => {
+    // If we just handled this via PointerUp (Mouse), ignore the subsequent Click
+    if (ignoreNextClick.current) {
+      ignoreNextClick.current = false;
+      return;
+    }
+
+    // Ignore if we just finished dragging or resizing (handled in pointerUp)
+    if (isDragging || isResizing) return;
+
+    // Safety check: Don't create if clicking on existing events (handled by event stopPropagation usually)
+
+    handleTap(e);
   };
 
 
@@ -650,6 +678,7 @@ function DayColumn({ date, items, onDragCreate, onEditItem, onDaySelect, isFullW
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onClick={handleClick}
         onPointerCancel={() => {
           setIsDragging(false);
           setDragStart(null);
