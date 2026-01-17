@@ -1,3 +1,5 @@
+import { renderItemCard } from './common/ItemCard.js';
+
 /**
  * Transit Component - Handles rendering and form for transportation data
  */
@@ -8,107 +10,8 @@ export function renderTransit(container, store, callbacks) {
 
   const { transit } = trip;
 
-  const formatDateTime = (dateStr) => {
-    if (!dateStr) return { time: '', date: '' };
-    const date = new Date(dateStr);
-    return {
-      time: date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: false }),
-      date: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-    };
-  };
-
-  const getTransitIcon = (type) => {
-    const icons = {
-      train: '🚄',
-      bus: '🚌',
-      ferry: '⛴️',
-      subway: '🚇',
-      taxi: '🚕'
-    };
-    return icons[type] || '🚆';
-  };
-
-  const calculateDuration = (start, end) => {
-    if (!start || !end) return '';
-    const diff = new Date(end) - new Date(start);
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    if (hours === 0 && mins === 0) return '';
-    return `${hours}h ${mins}m`;
-  };
-
   const transitCards = transit && transit.length > 0 ? transit.map(item => {
-    const dep = formatDateTime(item.departureTime);
-    const arr = formatDateTime(item.arrivalTime);
-    const duration = calculateDuration(item.departureTime, item.arrivalTime);
-    const travelers = item.travelers ? store.getTravelersByIds(item.travelers) : [];
-    const missingTravelers = trip.travelers.filter(t => !item.travelers?.includes(t.id));
-
-    return `
-      <div class="entity-card transit-card">
-        <div class="entity-card-body">
-          <div class="transit-header">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="transit-icon" style="font-size: 1.5rem;">${getTransitIcon(item.type)}</span>
-              <div>
-                <h3 style="margin: 0; font-size: 1.1rem;">${item.name}</h3>
-                ${item.route ? `<div class="text-muted text-small">${item.route}</div>` : ''}
-              </div>
-            </div>
-            ${callbacks ? `
-              <button class="btn-icon edit-btn" data-id="${item.id}" title="Edit Transit">✏️</button>
-            ` : ''}
-          </div>
-
-          <div class="transit-route-display" style="margin-top: 16px; display: flex; align-items: center; gap: 16px;">
-            <div class="transit-endpoint">
-              <div class="airport-code">${item.departureLocation}</div>
-              <div class="transit-time">${dep.time}</div>
-              <div class="transit-date">${dep.date}</div>
-            </div>
-            <div class="transit-path" style="flex: 1; text-align: center; position: relative;">
-               <div style="border-top: 2px dashed var(--text-muted); position: absolute; top: 50%; width: 100%; z-index: 1;"></div>
-               <span style="position: relative; z-index: 2; background: white; padding: 0 8px; font-size: 0.75rem; color: var(--text-muted);">${duration}</span>
-            </div>
-            <div class="transit-endpoint arrival">
-              <div class="airport-code">${item.arrivalLocation}</div>
-              <div class="transit-time">${arr.time}</div>
-              <div class="transit-date">${arr.date}</div>
-            </div>
-          </div>
-
-          ${item.cost && item.cost.amount > 0 ? `
-            <div style="margin-top: 12px; font-weight: 500;">
-              💰 ${item.cost.currency === 'JPY' ? '¥' : '$'}${item.cost.amount.toLocaleString()}
-            </div>
-          ` : ''}
-
-        </div>
-        <div class="entity-card-footer">
-          <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px;">
-            👥 Travelers:
-          </div>
-          <div class="traveler-list">
-            ${travelers.map(t => `
-              <div class="traveler-chip">
-                <div class="avatar avatar-sm" style="background-color: ${t.color}">${t.initials}</div>
-                <span>${t.name.split(' ')[0]}</span>
-              </div>
-            `).join('')}
-          </div>
-          ${missingTravelers.length > 0 ? `
-             <div style="margin-top: 12px; padding: 8px 12px; background: rgba(241, 196, 15, 0.15); border-radius: 6px; font-size: 0.75rem;">
-               ℹ️ Not on this: ${missingTravelers.map(t => t.name.split(' ')[0]).join(', ')}
-             </div>
-          ` : ''}
-          ${item.notes ? `
-            <div style="margin-top: 12px; padding: 8px 12px; background: var(--cream); border-radius: 6px; font-size: 0.75rem;">
-              📝 ${item.notes}
-            </div>
-          ` : ''}
-        </div>
-      </div>
-    `;
+    return renderItemCard(item, 'transit');
   }).join('') : `<div class="empty-state">
     <div style="font-size: 3rem; margin-bottom: 1rem;">🚆</div>
     <p>No transit legs added yet.</p>
@@ -129,7 +32,8 @@ export function renderTransit(container, store, callbacks) {
 
   if (callbacks) {
     container.querySelectorAll('.edit-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         const item = transit.find(t => t.id === btn.dataset.id);
         callbacks.onEdit('transit', item);
       });

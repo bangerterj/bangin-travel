@@ -1,4 +1,6 @@
-﻿/**
+﻿import { renderItemCard } from './common/ItemCard.js';
+
+/**
  * Stays Component - Handles rendering and form for accommodation data
  */
 
@@ -6,136 +8,10 @@ export function renderStays(container, store, callbacks) {
   const trip = store.getActiveTrip();
   if (!trip) return;
 
-  const { stays, travelers: allTravelers } = trip;
-
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    // Use T00:00:00 to ensure local date parsing
-    const date = new Date(dateStr.split('T')[0] + 'T00:00:00');
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
-
-  const calculateNights = (checkIn, checkOut) => {
-    if (!checkIn || !checkOut) return 0;
-    const d1 = new Date(checkIn.split('T')[0] + 'T00:00:00');
-    const d2 = new Date(checkOut.split('T')[0] + 'T00:00:00');
-    const diff = d2 - d1;
-    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-  };
-
-  const getStayIcon = (type) => {
-    const icons = {
-      hotel: '🏨',
-      airbnb: '🏠',
-      hostel: '🛌'
-    };
-    return icons[type] || '🏨';
-  };
-
-  const getStayLabel = (type) => {
-    const labels = {
-      hotel: 'Hotel',
-      airbnb: 'Airbnb',
-      hostel: 'Hostel'
-    };
-    return labels[type] || type;
-  };
-
-  const formatAmenity = (amenity) => {
-    const labels = {
-      'wifi': '📶 WiFi',
-      'breakfast': '🍳 Breakfast',
-      'pool': '🏊 Pool',
-      'gym': '💪 Gym'
-    };
-    return labels[amenity.toLowerCase()] || amenity;
-  };
+  const { stays } = trip;
 
   const stayCards = stays && stays.length > 0 ? stays.map(stay => {
-    const nights = calculateNights(stay.checkIn, stay.checkOut);
-    const travelers = store.getTravelersByIds(stay.travelers);
-    const notStaying = allTravelers.filter(t => !stay.travelers.includes(t.id));
-
-    return `
-      <div class="entity-card stay-card">
-        <div class="entity-card-body">
-          <div class="stay-card-content">
-            <div class="stay-thumbnail">
-              ${getStayIcon(stay.type)}
-            </div>
-            <div class="stay-info">
-              <span class="badge badge-type">${getStayLabel(stay.type)}</span>
-              <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                <h3 style="margin-top: 8px;">${stay.name}</h3>
-                ${callbacks ? `
-                  <button class="btn-icon edit-btn" data-id="${stay.id}" title="Edit Stay">✏️</button>
-                ` : ''}
-              </div>
-              
-              <div class="stay-dates">
-                <div class="stay-date-item">
-                  <span class="stay-date-label">Check-in</span>
-                  <span class="stay-date-value">${formatDate(stay.checkIn)}</span>
-                </div>
-                <div style="font-size: 1.25rem; color: var(--text-muted);">→</div>
-                <div class="stay-date-item">
-                  <span class="stay-date-label">Check-out</span>
-                  <span class="stay-date-value">${formatDate(stay.checkOut)}</span>
-                </div>
-                <div style="background: var(--accent-orange); color: white; padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: 0.75rem;">
-                  ${nights} ${nights === 1 ? 'night' : 'nights'}
-                </div>
-              </div>
-
-              <div class="stay-address">
-                <span>📍</span>
-                <span>${stay.address}</span>
-              </div>
-
-
-
-              ${stay.cost && stay.cost.amount > 0 ? `
-                <div class="stay-cost">
-                  <span>💰</span>
-                  <span class="stay-cost-total">$${parseFloat(stay.cost.amount || 0).toFixed(2)}</span>
-                  ${stay.cost.perNight ? `<span class="text-muted">($${parseFloat(stay.cost.perNight).toFixed(2)}/night × ${nights} nights)</span>` : ''}
-                  ${travelers.length > 1 ? `
-                    <span class="text-muted">• $${Math.round(stay.cost.amount / travelers.length).toLocaleString()}/person</span>
-                  ` : ''}
-                </div>
-              ` : ''}
-            </div>
-          </div>
-        </div>
-        <div class="entity-card-footer">
-          <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px;">
-            👥 Staying here:
-          </div>
-          <div class="traveler-list">
-            ${travelers.map(t => `
-              <div class="traveler-chip">
-                <div class="avatar avatar-sm" style="background-color: ${t.color}">${t.initials}</div>
-                <span>${t.name.split(' ')[0]}</span>
-              </div>
-            `).join('')}
-          </div>
-          ${notStaying.length > 0 ? `
-            <div style="margin-top: 12px; padding: 8px 12px; background: rgba(52, 152, 219, 0.1); border-radius: 6px; font-size: 0.75rem;">
-              ℹ️ ${notStaying.map(t => t.name.split(' ')[0]).join(' & ')} staying elsewhere
-            </div>
-          ` : ''}
-          ${stay.notes ? `
-            <div style="margin-top: 12px; padding: 8px 12px; background: var(--cream); border-radius: 6px; font-size: 0.75rem;">
-              💡 ${stay.notes}
-            </div>
-          ` : ''}
-        </div>
-      </div>
-    `;
+    return renderItemCard(stay, 'stay');
   }).join('') : `<div class="empty-state">
     <div style="font-size: 3rem; margin-bottom: 1rem;">🏨</div>
     <p>No stays added yet.</p>
@@ -156,7 +32,8 @@ export function renderStays(container, store, callbacks) {
 
   if (callbacks) {
     container.querySelectorAll('.edit-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         const stay = stays.find(s => s.id === btn.dataset.id);
         callbacks.onEdit('stays', stay);
       });

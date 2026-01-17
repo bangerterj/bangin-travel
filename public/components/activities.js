@@ -1,4 +1,6 @@
-﻿/**
+﻿import { renderItemCard } from './common/ItemCard.js';
+
+/**
  * Activities Component - Handles rendering and form for trip activities
  */
 
@@ -7,23 +9,35 @@ export function renderActivities(container, store, callbacks) {
   if (!trip) return;
 
   const { activities } = trip;
-  let filter = 'all';
 
   function render() {
-    // No filtering, show all sorted by date
-    const sortedActivities = [...activities].sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+    // Helper to get start/end times
+    const getStartTime = (a) => a.startAt || a.startTime;
+
+    // Helper to get location (API stores in metadata.location, legacy at top level)
+    const getLocation = (a) => {
+      if (a.metadata?.location?.displayName) return a.metadata.location.displayName;
+      if (typeof a.location === 'object' && a.location?.displayName) return a.location.displayName;
+      if (typeof a.location === 'string') return a.location;
+      return '';
+    };
+
+    // Filter and sort
+    const sortedActivities = [...activities]
+      .filter(a => getStartTime(a))
+      .sort((a, b) => new Date(getStartTime(a)) - new Date(getStartTime(b)));
 
     // Group by date
     const grouped = {};
     if (sortedActivities.length > 0) {
       sortedActivities.forEach(a => {
-        const dateKey = new Date(a.startTime.split('T')[0] + 'T00:00:00').toDateString();
+        const startTime = getStartTime(a);
+        const dateKey = new Date(startTime.split('T')[0] + 'T00:00:00').toDateString();
         if (!grouped[dateKey]) grouped[dateKey] = [];
         grouped[dateKey].push(a);
       });
     }
-    const sortedDates = Object.keys(grouped); // Already sorted by insertion implicitly if we sorted input? No, verify.
-    // robust sort
+    const sortedDates = Object.keys(grouped);
     sortedDates.sort((a, b) => new Date(a) - new Date(b));
 
     const formatGroupDate = (dateStr) => {
@@ -31,27 +45,15 @@ export function renderActivities(container, store, callbacks) {
       return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     };
 
-    const formatTime = (dateStr) => {
-      if (!dateStr) return '';
-      return new Date(dateStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-    };
-
-    const calculateDuration = (start, end) => {
-      if (!start || !end) return '';
-      const diff = new Date(end) - new Date(start);
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      if (hours === 0) return `${mins} min`;
-      if (mins === 0) return `${hours} hours`;
-      return `${hours}h ${mins}m`;
-    };
-
     const activityGroups = sortedDates.map(dateKey => {
       const dayActivities = grouped[dateKey];
+      // Collect updated locations for the header summary
       const locations = [...new Set(dayActivities.map(a => {
-        const parts = a.location.split(',');
+        const loc = getLocation(a);
+        if (!loc) return 'Unknown';
+        const parts = loc.split(',');
         return parts[parts.length - 1].trim();
-      }))];
+      }).filter(Boolean))];
 
       return `
         <div class="activity-day-group">
@@ -59,72 +61,7 @@ export function renderActivities(container, store, callbacks) {
             <div class="activity-day-date">${formatGroupDate(dateKey)}</div>
             <div class="activity-day-location">📍 ${locations.join(', ')}</div>
           </div>
-          ${dayActivities.map(activity => {
-        const travelers = activity.travelers ? store.getTravelersByIds(activity.travelers) : [];
-        const duration = calculateDuration(activity.startTime, activity.endTime);
-        const isBooked = activity.status === 'booked';
-
-        return `
-              <div class="entity-card activity-card" style="${isBooked ? 'border-left: 4px solid var(--success);' : ''}">
-                <div class="entity-card-body">
-                  <div class="activity-card-header">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
-                        <div class="activity-title-row">
-                             <span class="activity-icon">📍</span>
-                             <h3>${activity.name}</h3>
-                        </div>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            ${isBooked ? '<span class="badge badge-nice-to-have">✅ Booked</span>' : '<span class="badge badge-optional">💭 Planned</span>'}
-                            ${callbacks ? `<button class="btn-icon edit-btn" data-id="${activity.id}" title="Edit Activity">✏️</button>` : ''}
-                        </div>
-                    </div>
-                  </div>
-
-                  <div class="activity-time-location">
-                    <div>
-                      <span>🕒</span>
-                      <span>${formatTime(activity.startTime)} – ${formatTime(activity.endTime)}</span>
-                      <span class="text-muted">(${duration})</span>
-                    </div>
-                    <div>
-                      <span>📍</span>
-                      <span>${activity.location}</span>
-                    </div>
-                    ${activity.cost && activity.cost.amount > 0 ? `
-                      <div>
-                        <span>💰</span>
-                        <span>$${activity.cost.amount.toLocaleString()}/person</span>
-                      </div>
-                    ` : ''}
-                  </div>
-
-                  ${activity.notes ? `
-                    <div class="activity-notes">
-                      <span>📝</span>
-                      <span>${activity.notes}</span>
-                    </div>
-                  ` : ''}
-
-                  ${activity.links && activity.links.filter(Boolean).length > 0 ? `
-                    <div style="margin-bottom: 12px;">
-                      ${activity.links.map(link => `<a href="${link}" target="_blank" style="font-size: 0.75rem; color: var(--primary-blue);">🔗 More Info</a>`).join(' ')}
-                    </div>
-                  ` : ''}
-
-                  <div style="margin-top: 12px;">
-                    <div class="traveler-list">
-                      ${travelers.map(t => `
-                        <div class="traveler-chip">
-                          <div class="avatar avatar-sm" style="background-color: ${t.color}">${t.initials}</div>
-                          <span>${t.name.split(' ')[0]}</span>
-                        </div>
-                      `).join('')}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            `;
-      }).join('')}
+          ${dayActivities.map(activity => renderItemCard(activity, 'activity')).join('')}
         </div>
       `;
     }).join('');
@@ -138,8 +75,6 @@ export function renderActivities(container, store, callbacks) {
         ${callbacks ? `<button class="btn-primary" id="add-activity-btn">➕ Add Activity</button>` : ''}
       </div>
 
-      <!-- No Filters -->
-
       ${activityGroups.length > 0 ? activityGroups : `
         <div class="empty-state">
           <div style="font-size: 3rem; margin-bottom: 1rem;">📍</div>
@@ -150,7 +85,8 @@ export function renderActivities(container, store, callbacks) {
 
     if (callbacks) {
       container.querySelectorAll('.edit-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
           const item = activities.find(a => a.id === btn.dataset.id);
           callbacks.onEdit('activities', item);
         });
@@ -171,7 +107,34 @@ export function renderActivityForm(activity = null) {
   const isEdit = !!activity;
   const allTravelerIds = window.store?.getActiveTrip()?.travelers.map(t => t.id) || [];
 
-  const data = activity || {
+  // Helper to extract location string from various formats
+  const extractLocation = (act) => {
+    if (!act) return '';
+    // Check metadata.location first (from API)
+    if (act.metadata?.location?.displayName) return act.metadata.location.displayName;
+    // Check if location is an object with displayName  
+    if (typeof act.location === 'object' && act.location?.displayName) return act.location.displayName;
+    // Check if location is a string
+    if (typeof act.location === 'string') return act.location;
+    return '';
+  };
+
+  // Helper to get start/end time from either API or legacy format
+  const getStartTime = (act) => act?.startAt || act?.startTime || '';
+  const getEndTime = (act) => act?.endAt || act?.endTime || '';
+
+  const data = activity ? {
+    name: activity.name || activity.title || '',
+    location: extractLocation(activity),
+    startTime: getStartTime(activity),
+    endTime: getEndTime(activity),
+    status: activity.status || 'planned',
+    cost: activity.cost || activity.metadata?.cost || { amount: 0, currency: 'USD' },
+    notes: activity.notes || '',
+    links: activity.links || activity.metadata?.links || [],
+    travelers: activity.travelers || allTravelerIds,
+    paidBy: activity.paidBy || activity.cost?.paidBy || activity.metadata?.cost?.paidBy || ''
+  } : {
     name: '',
     location: '',
     startTime: '',
@@ -181,7 +144,7 @@ export function renderActivityForm(activity = null) {
     notes: '',
     links: [],
     travelers: allTravelerIds,
-    paidBy: activity?.paidBy || activity?.cost?.paidBy || activity?.metadata?.cost?.paidBy || ''
+    paidBy: ''
   };
 
   /* Robust Date Formatter using Trip Timezone */

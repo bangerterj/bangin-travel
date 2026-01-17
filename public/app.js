@@ -12,6 +12,7 @@ import { renderTransit, renderTransitForm } from './components/transit.js';
 import { renderActivities, renderActivityForm } from './components/activities.js';
 import { renderLedger } from './components/ledger.js';
 import { renderTripSelector, renderTripSetupForm, renderTripSwitcher, bindTripSwitcherEvents, renderSetPasswordModal, renderInviteModal, renderTripEditForm, renderAccountSettings, renderAddItemPicker } from './components/trips.js';
+import { renderItemDetails } from './components/common/ItemDetails.js';
 import { setupAutocomplete } from './components/autocomplete.js';
 import { TripService } from './services/TripService.js';
 
@@ -632,15 +633,19 @@ class App {
 
             switch (activeTab) {
                 case 'map':
-                    renderSummary(activePane, store, callbacks);
+                    renderSummary(activePane, store, {
+                        ...callbacks,
+                        onView: (type, item) => this.handleViewItem(type, item)
+                    });
                     break;
                 case 'calendar':
                     renderCalendar(activePane, store, (type, data, mode) => {
                         if (mode === 'edit') {
-                            // Editing existing item - open form directly
                             this.openEntityModal(type === 'activity' ? 'activities' : type + 's', data);
+                        } else if (mode === 'view') {
+                            this.handleViewItem(type, data);
                         } else {
-                            // Creating new item - show type picker first
+                            // Creating new item
                             this.handleAddItemFromCalendar(data);
                         }
                     });
@@ -759,6 +764,7 @@ class App {
 
             try {
                 await store.createTrip(newTrip);
+                this.modalHasChanges = false; // Reset so closeModal doesn't prompt
                 this.closeModal();
                 this.render();
                 this.showToast('✅ Trip created successfully!');
@@ -791,6 +797,27 @@ class App {
         this.currentItem = item;
         this.openModal(content);
         this.bindEntityForm(type, item);
+    }
+
+    handleViewItem(type, item) {
+        const content = renderItemDetails(item, type);
+        this.openModal(content);
+
+        // Bind Events
+        const editBtn = document.getElementById('details-edit-btn');
+        const closeBtn = document.getElementById('details-close-btn');
+
+        if (editBtn) {
+            editBtn.addEventListener('click', () => {
+                // Switch to edit mode
+                const editType = type === 'activity' ? 'activities' : type + 's';
+                this.openEntityModal(editType, item);
+            });
+        }
+
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.closeModal());
+        }
     }
 
     handleAddItemFromCalendar(dateData) {
@@ -1521,7 +1548,57 @@ class App {
 
             console.log('[DEBUG] Events bound for trip:', trip.id, '(v3)');
 
+            // Setup Autocomplete for Destination
+            const destInput = document.getElementById('edit-trip-destination');
+            if (destInput) {
+                destInput.name = 'destination'; // Required for hidden inputs naming
+                this.setupLocationAutocomplete(destInput, true);
+            }
+
             cancelBtn?.addEventListener('click', () => this.closeModal());
+
+            // Invite Handler
+            const inviteBtn = document.getElementById('invite-btn');
+            inviteBtn?.addEventListener('click', () => {
+                this.openModal(renderInviteModal(trip));
+
+                // Bind Invite Form
+                const inviteForm = document.getElementById('email-invite-form');
+                inviteForm?.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const email = document.getElementById('invite-email').value;
+                    const btn = inviteForm.querySelector('button');
+
+                    btn.disabled = true;
+                    btn.textContent = 'Sending...';
+
+                    try {
+                        const res = await fetch(`/api/trips/${trip.id}/invite`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email })
+                        });
+
+                        if (res.ok) {
+                            document.getElementById('invite-email-success').classList.remove('hidden');
+                            inviteForm.reset();
+                            setTimeout(() => {
+                                btn.disabled = false;
+                                btn.textContent = 'Send Invitation';
+                            }, 2000);
+                        } else {
+                            const data = await res.json();
+                            alert('Error: ' + (data.error || 'Failed to send invite'));
+                            btn.disabled = false;
+                            btn.textContent = 'Send Invitation';
+                        }
+                    } catch (err) {
+                        alert('Server error sending invite');
+                        btn.disabled = false;
+                        btn.textContent = 'Send Invitation';
+                    }
+                });
+            });
 
             // Delete Trip Handler
             deleteBtn?.addEventListener('click', async () => {
@@ -1577,12 +1654,40 @@ class App {
                 e.preventDefault();
                 console.log('[DEBUG] Form Submit');
 
+                // Extract coordinates from hidden inputs
+                const latInput = form.querySelector('input[name="destination.coordinates.lat"]');
+                const lngInput = form.querySelector('input[name="destination.coordinates.lng"]');
+
+                const coordinates = (latInput && lngInput && latInput.value && lngInput.value)
+                    ? { lat: parseFloat(latInput.value), lng: parseFloat(lngInput.value) }
+                    : null;
+
+                const destValue = document.getElementById('edit-trip-destination').value;
+                let locationPayload = undefined;
+
+                if (coordinates) {
+                    locationPayload = {
+                        displayName: destValue,
+                        coordinates: coordinates
+                    };
+                } else if (destValue !== trip.destination) {
+                    // User changed text but no new coords (manual entry)
+                    locationPayload = {
+                        displayName: destValue,
+                        coordinates: null
+                    };
+                }
+
                 const updateData = {
                     name: document.getElementById('edit-trip-name').value,
-                    destination: document.getElementById('edit-trip-destination').value,
+                    destination: destValue,
                     startDate: document.getElementById('edit-trip-start-date').value,
                     endDate: document.getElementById('edit-trip-end-date').value
                 };
+
+                if (locationPayload) {
+                    updateData.location = locationPayload;
+                }
 
                 const submitBtn = form.querySelector('button[type="submit"]');
                 if (submitBtn) submitBtn.disabled = true;

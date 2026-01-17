@@ -1,4 +1,6 @@
-﻿/**
+﻿import { renderItemCard } from './common/ItemCard.js';
+
+/**
  * Flights Component - Handles rendering and form for flight data
  */
 
@@ -8,138 +10,8 @@ export function renderFlights(container, store, callbacks) {
 
   const { flights, travelers: allTravelers } = trip;
 
-  const formatDateTime = (dateStr, timezone) => {
-    if (!dateStr) return { time: '', date: '', offset: '' }; // Added offset
-    // robust parsing for purely local display (no timezone conversion)
-    // expected format: YYYY-MM-DDTHH:mm
-    try {
-      const [d, t] = dateStr.split('T');
-      if (!d || !t) throw new Error('Invalid format');
-
-      const [year, month, day] = d.split('-').map(Number);
-      const [hour, minute] = t.split(':').map(Number);
-
-      const dateObj = new Date(year, month - 1, day, hour, minute);
-
-      // Get UTC offset string if timezone is provided
-      let offset = '';
-      if (timezone) {
-        try {
-          // Intl can give us "GMT+9" or "GMT-7"
-          const part = new Intl.DateTimeFormat('en-US', { timeZone: timezone, timeZoneName: 'shortOffset' })
-            .formatToParts(dateObj).find(p => p.type === 'timeZoneName');
-          if (part) offset = part.value.replace('GMT', 'UTC');
-        } catch (e) { console.error('Offset calc error', e); }
-      }
-
-      return {
-        time: dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }), // Changed to 12h
-        date: dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-        offset: offset
-      };
-    } catch (e) {
-      // Fallback
-      const date = new Date(dateStr);
-      return {
-        time: date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
-        date: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-        offset: ''
-      };
-    }
-  };
-
-  const getBadgeClass = (type) => {
-    switch (type) {
-      case 'departure': return 'badge-departure';
-      case 'return': return 'badge-return';
-      case 'internal': return 'badge-internal';
-      default: return 'badge-type';
-    }
-  };
-
-  const getBadgeLabel = (type) => {
-    switch (type) {
-      case 'departure': return 'Outbound';
-      case 'return': return 'Return';
-      case 'internal': return 'Internal';
-      default: return type;
-    }
-  };
-
   const flightCards = flights && flights.length > 0 ? flights.map(flight => {
-    // Pass timezone from metadata
-    const dep = formatDateTime(flight.departureTime, flight.metadata?.departureTimezone);
-    const arr = formatDateTime(flight.arrivalTime, flight.metadata?.arrivalTimezone);
-    const travelers = store.getTravelersByIds(flight.travelers);
-    const missingTravelers = allTravelers.filter(t => !flight.travelers.includes(t.id));
-
-    return `
-      <div class="entity-card flight-card">
-        <div class="flight-card-header">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="badge ${getBadgeClass(flight.type)}">${getBadgeLabel(flight.type)}</span>
-            <span class="text-muted text-small flight-card-title">${flight.airline} ${flight.flightNumber}</span>
-          </div>
-          ${callbacks ? `
-            <button class="btn-icon edit-btn" data-id="${flight.id}" title="Edit Flight">✏️</button>
-          ` : ''}
-        </div>
-        <div class="entity-card-body flight-card-body">
-          <div class="flight-route-display">
-            <div class="flight-endpoint">
-              <div class="airport-code">${flight.departureAirport}</div>
-              <div class="flight-time-group">
-                <div class="flight-time">${dep.time}</div>
-                ${dep.offset ? `<div class="flight-offset">${dep.offset}</div>` : ''}
-              </div>
-              <div class="flight-date">${dep.date}</div>
-            </div>
-            <div class="flight-path">
-              <div class="flight-path-line">
-                <span class="line"></span>
-                <span class="plane">✈️</span>
-                <span class="line"></span>
-              </div>
-              <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
-                ${flight.duration || ''}
-              </div>
-            </div>
-            <div class="flight-endpoint arrival">
-              <div class="airport-code">${flight.arrivalAirport}</div>
-              <div class="flight-time-group">
-                <div class="flight-time">${arr.time}</div>
-                ${arr.offset ? `<div class="flight-offset">${arr.offset}</div>` : ''}
-              </div>
-              <div class="flight-date">${arr.date}</div>
-            </div>
-          </div>
-          
-        </div>
-        <div class="entity-card-footer">
-          <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px;">
-            👥 Travelers:
-          </div>
-          <div class="traveler-list">
-            ${travelers.map(t => `
-              <div class="traveler-chip">
-                <div class="avatar avatar-sm" style="background-color: ${t.color}">${t.initials}</div>
-                <span>${t.name.split(' ')[0]}</span>
-              </div>
-            `).join('')}
-          </div>
-          ${missingTravelers.length > 0 && flight.type === 'internal' ? `
-            <div style="margin-top: 12px; padding: 8px 12px; background: rgba(241, 196, 15, 0.15); border-radius: 6px; font-size: 0.75rem;">
-              ⚠️ Not on this flight: ${missingTravelers.map(t => t.name.split(' ')[0]).join(', ')}
-            </div>
-          ` : ''}
-          ${flight.notes ? `
-            <div style="margin-top: 12px; padding: 8px 12px; background: var(--cream); border-radius: 6px; font-size: 0.75rem;">
-              📌 ${flight.notes}
-            </div>
-          ` : ''}
-        </div>
-      </div>
-    `;
+    return renderItemCard(flight, 'flight');
   }).join('') : `<div class="empty-state">
     <div style="font-size: 3rem; margin-bottom: 1rem;">✈️</div>
     <p>No flights added yet.</p>
@@ -160,7 +32,9 @@ export function renderFlights(container, store, callbacks) {
 
   if (callbacks) {
     container.querySelectorAll('.edit-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        // Stop propagation just in case, though item card already handles map btn propagation
+        e.stopPropagation();
         const flight = flights.find(f => f.id === btn.dataset.id);
         callbacks.onEdit('flights', flight);
       });

@@ -1,0 +1,105 @@
+=== Neon Database Schema ===
+
+Tables: users, accounts, sessions, verification_tokens, items, trips, travelers, item_travelers, invitations, airports
+
+users:
+  - id (uuid)
+  - name (text)
+  - email (text)
+  - emailVerified (timestamp with time zone)
+  - image (text)
+  - password_hash (text)
+
+accounts:
+  - id (uuid)
+  - userId (uuid)
+  - type (text)
+  - provider (text)
+  - providerAccountId (text)
+  - refresh_token (text)
+  - access_token (text)
+  - expires_at (bigint)
+  - token_type (text)
+  - scope (text)
+  - id_token (text)
+  - session_state (text)
+
+sessions:
+  - id (uuid)
+  - sessionToken (text)
+  - userId (uuid)
+  - expires (timestamp with time zone)
+
+verification_tokens:
+  - identifier (text)
+  - token (text)
+  - expires (timestamp with time zone)
+
+items:
+  - id (text)
+  - trip_id (text)
+  - type (text)
+  - status (text)
+  - title (text)
+  - notes (text)
+  - link_url (text)
+  - start_at (text)
+  - end_at (text)
+  - metadata (jsonb)
+  - paid_by (text)
+  - created_at (timestamp with time zone)
+  - updated_at (timestamp with time zone)
+
+trips:
+  - id (text)
+  - name (text)
+  - destination (text)
+  - start_date (text)
+  - end_date (text)
+  - timezone (text)
+  - location (jsonb)
+  - cover_image (text)
+  - is_archived (boolean)
+  - created_at (timestamp with time zone)
+  - updated_at (timestamp with time zone)
+
+travelers:
+  - id (text)
+  - trip_id (text)
+  - display_name (text)
+  - email (text)
+  - initials (text)
+  - color (text)
+  - notes (text)
+  - is_organizer (boolean)
+  - user_id (text)
+  - couple_id (text)
+  - created_at (timestamp with time zone)
+  - updated_at (timestamp with time zone)
+
+item_travelers:
+  - item_id (text)
+  - traveler_id (text)
+  - role (text)
+  - created_at (timestamp with time zone)
+
+invitations:
+  - id (uuid)
+  - trip_id (text)
+  - email (text)
+  - token (text)
+  - role (text)
+  - status (text)
+  - expires_at (timestamp with time zone)
+  - created_at (timestamp with time zone)
+
+airports:
+  - id (integer)
+  - name (text)
+  - city (text)
+  - country (text)
+  - iata (text)
+  - icao (text)
+  - latitude (double precision)
+  - longitude (double precision)
+  - timezone_id (text)

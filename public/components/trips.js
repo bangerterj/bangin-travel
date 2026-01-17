@@ -380,6 +380,7 @@ export function renderTripEditForm(trip) {
         <div class="form-actions" style="flex-wrap: wrap; gap: 8px;">
           <button type="button" id="delete-trip-btn" class="btn-danger">🗑️ Delete Trip</button>
           <div style="flex: 1;"></div>
+          <button type="button" class="btn-secondary" id="invite-btn">✉️ Invite Travelers</button>
           <button type="button" class="btn-secondary" id="archive-trip-btn">
             ${trip.isArchived ? '📥 Revive' : '📦 Archive'}
           </button>

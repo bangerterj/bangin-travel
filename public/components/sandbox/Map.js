@@ -311,7 +311,7 @@ export default function MapView({
     if (!isReady || !mapRef.current || mapInstanceRef.current) return;
 
     const L = window.L;
-    const map = L.map(mapRef.current).setView([35.6762, 139.6503], 11);
+    const map = L.map(mapRef.current).setView([34.0522, -118.2437], 11);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',

@@ -377,7 +377,7 @@ export function renderCalendar(container, store, openModal) {
         // Find the item data
         const itemData = allItems.find(i => i.id === itemId);
         if (itemData && openModal) {
-          openModal(itemType, itemData.data, 'edit');
+          openModal(itemType, itemData.data, 'view');
         }
       });
     });

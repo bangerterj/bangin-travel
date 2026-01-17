@@ -193,15 +193,29 @@ function renderMap(container, events, trip) {
   container.innerHTML = '';
   const L = window.L;
 
-  // Use trip location as fallback, or default to Tokyo
+  // Use trip location as fallback, or default to Los Angeles
   const tripCoords = trip?.location?.coordinates;
   const defaultCenter = tripCoords
     ? [tripCoords.lat, tripCoords.lng]
-    : [35.6762, 139.6503];
+    : [34.0522, -118.2437];
 
   const map = L.map(container, {
     zoomControl: false
   }).setView(defaultCenter, 12);
+
+  // Fallback: If no coordinates but we have a destination name, try to geocode it
+  if (!tripCoords && trip?.destination) {
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(trip.destination)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.length > 0) {
+          const { lat, lon } = data[0];
+          map.setView([lat, lon], 12);
+          console.log(`[Map] Geocoded fallback for "${trip.destination}":`, lat, lon);
+        }
+      })
+      .catch(err => console.error('[Map] Geocoding failed:', err));
+  }
 
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; CARTO',
@@ -264,9 +278,15 @@ function renderMap(container, events, trip) {
     const marker = L.marker([coords.lat, coords.lng], { icon }).addTo(map);
 
     marker.on('click', () => {
-      showDetailCard(event);
+      // Trigger View Mode if callback provided
+      if (typeof callbacks?.onView === 'function') {
+        callbacks.onView(event.type, event.data);
+      } else {
+        // Fallback or old behavior (removed)
+        console.warn('No onView callback provided for map item', event);
+      }
+
       map.flyTo([coords.lat, coords.lng], map.getZoom(), {
-        paddingBottomRight: [0, 200], // Offset for card
         animate: true,
         duration: 0.5
       });
@@ -278,126 +298,6 @@ function renderMap(container, events, trip) {
   if (bounds.length > 0) {
     map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
   }
-}
-
-function showDetailCard(event) {
-  const card = document.getElementById('map-detail-card');
-  const content = document.getElementById('detail-card-content');
-
-  if (!card || !content) return;
-
-  const typeColor = {
-    stay: '#9b59b6',
-    activity: '#e67e22',
-    transit: '#1abc9c',
-    flight: '#3498db'
-  }[event.type] || '#999';
-
-  const icon = {
-    stay: '🏨',
-    activity: '🎯',
-    transit: '🚃',
-    flight: '✈️'
-  }[event.type] || '📍';
-
-  const renderTimeInfo = () => {
-    const dtOpts = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
-    const format = (d) => d ? new Date(d).toLocaleDateString(undefined, dtOpts) : 'TBD';
-
-    if (event.type === 'stay') {
-      return `
-            <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; font-size: 0.9rem; color: #666;">
-                <strong style="color: var(--dark-ink);">Check In:</strong>
-                <span>${format(event.startTime)}</span>
-                <strong style="color: var(--dark-ink);">Check Out:</strong>
-                <span>${format(event.endTime)}</span>
-            </div>
-          `;
-    } else if (event.type === 'flight') {
-      return `
-            <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; font-size: 0.9rem; color: #666;">
-                <strong style="color: var(--dark-ink);">Departure:</strong>
-                <span>${format(event.startTime)} ${event.data.departureAirport ? `(${event.data.departureAirport})` : ''}</span>
-                <strong style="color: var(--dark-ink);">Arrival:</strong>
-                <span>${format(event.endTime)} ${event.data.arrivalAirport ? `(${event.data.arrivalAirport})` : ''}</span>
-            </div>
-          `;
-    } else {
-      // Activities & Transit
-      if (!event.startTime) return '';
-      const endStr = event.endTime ? ` - ${new Date(event.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '';
-      return `
-            <div style="color: #666; font-size: 0.9rem; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-               <span>🕒 ${format(event.startTime)}${endStr}</span>
-            </div>
-          `;
-    }
-  };
-
-  content.innerHTML = `
-    <div style="display: flex; gap: 16px; align-items: flex-start;">
-      <div style="
-        width: 56px; 
-        height: 56px; 
-        background: ${typeColor}20; 
-        border: 2px solid ${typeColor};
-        border-radius: 12px; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center;
-        font-size: 1.75rem;
-        flex-shrink: 0;
-      ">
-        ${icon}
-      </div>
-      <div style="flex: 1;">
-        <h3 style="margin: 0 0 8px 0; font-size: 1.25rem; font-family: var(--font-heading); color: var(--dark-ink); line-height: 1.3;">
-          ${event.title}
-        </h3>
-        
-        ${renderTimeInfo()}
-        
-        <div style="margin-top: 8px; font-size: 0.9rem; color: #888; display: flex; align-items: center; gap: 6px;">
-          ${event.location?.displayName ? `📍 ${event.location.displayName}` : ''}
-        </div>
-      </div>
-    </div>
-    
-    <div style="margin-top: 24px; display: flex; gap: 12px;">
-      <button onclick="window.open('https://maps.google.com/?q=${event.coordinates.lat},${event.coordinates.lng}', '_blank')" 
-        style="
-        flex: 1; 
-        padding: 12px; 
-        background: var(--dark-ink, #2c3e50); 
-        color: white; 
-        border: none; 
-        border-radius: 12px; 
-        font-weight: 600; 
-        cursor: pointer;
-        display: flex; align-items: center; justify-content: center; gap: 8px;
-        transition: opacity 0.2s;
-        box-shadow: 2px 2px 0 rgba(0,0,0,0.2);
-      ">
-        <span>🗺️</span> Directions
-      </button>
-       <button style="
-        width: 48px;
-        padding: 0; 
-        background: white; 
-        color: var(--dark-ink); 
-        border: 2px solid #e0e0e0; 
-        border-radius: 12px; 
-        cursor: pointer;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 1.25rem;
-      ">
-        ✏️
-      </button>
-    </div>
-  `;
-
-  // Show Card
-  card.style.transform = 'translateY(0)';
 }
 
 function formatDateRange(start, end) {
