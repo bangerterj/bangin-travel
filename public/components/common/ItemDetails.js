@@ -4,191 +4,291 @@
  * Used in the global modal when clicking items in Calendar or Map.
  */
 
+// Icon mapping
 const getIcon = (cat, type) => {
     const map = {
         flight: '✈️', stay: '🏨', activity: '📍', transit: '🚆',
-        airbnb: '🏠', hostel: '🛏️', train: '🚄', bus: '🚌', rental_car: '🚗',
-        dining: '🍽️'
+        hotel: '🏨', airbnb: '🏠', train: '🚄', bus: '🚌', rental_car: '🚗', drive: '🚗',
+        dining: '🍽️', museum: '🏛️', hike: '🥾'
     };
-    return map[type] || map[cat] || '❓';
+    return map[type] || map[cat] || '📅';
 };
 
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : '';
-const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '';
+const fmt = (d) => d ? new Date(d).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '';
+const fmtDateShort = (d) => d ? new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+
+const formatType = (type) => {
+    if (!type) return '';
+    return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+};
+
+const extractLocationString = (loc) => {
+    if (!loc) return null;
+
+    let obj = loc;
+    // Check if it's a JSON string
+    if (typeof loc === 'string' && (loc.startsWith('{') || loc.startsWith('['))) {
+        try {
+            obj = JSON.parse(loc);
+        } catch (e) {
+            // Not JSON, keep as string
+            return loc;
+        }
+    }
+
+    if (typeof obj === 'object' && obj !== null) {
+        // Try common properties in order of preference
+        return obj.displayName || obj.fullAddress || obj.address || obj.formatted_address || obj.name || JSON.stringify(obj);
+    }
+    return String(loc);
+};
 
 export function renderItemDetails(item, category) {
     const isBooked = item.status === 'booked';
 
     // --- Header Data ---
     let title = item.name || item.title;
-    let subtitle = '';
+    let eyebrow = category.toUpperCase();
 
+    // Category specific title/eyebrow overrides
     if (category === 'flight') {
         title = `${item.departureAirport || '?'} ➝ ${item.arrivalAirport || '?'}`;
-        subtitle = `${item.airline || 'Airline'} • ${item.flightNumber || ''}`;
-    } else if (category === 'stay') {
-        subtitle = item.address || '';
+        eyebrow = `${item.airline || 'Flight'} • ${item.flightNumber || ''}`;
     } else if (category === 'transit') {
-        if (item.type === 'rental_car') {
-            subtitle = item.departureLocation || '';
-        } else {
-            title = item.name || 'Transit';
-            subtitle = `${item.departureLocation || '?'} ➝ ${item.arrivalLocation || '?'}`;
+        // Respect custom name if present
+        if (!item.name) {
+            if (item.type === 'rental_car') {
+                title = 'Rental Car Pick-up';
+            } else if (item.departureLocation) {
+                // If location strings are long, maybe truncate or handled by title display
+                const dep = extractLocationString(item.departureLocation);
+                const arr = extractLocationString(item.arrivalLocation);
+                if (dep && arr) title = `${dep} ➝ ${arr}`;
+                else title = dep || arr || 'Transit';
+            }
         }
-    } else if (category === 'activity') {
-        subtitle = item.location || '';
+
+        if (item.type === 'rental_car') {
+            eyebrow = item.company || 'Rental Car';
+        }
     }
 
-    // --- Time Data ---
-    let timeSection = '';
-    if (category === 'flight') {
-        timeSection = `
-            <div class="time-row"><strong>Depart:</strong> ${fmtDate(item.departureTime)} • ${fmtTime(item.departureTime)}</div>
-            <div class="time-row"><strong>Arrive:</strong> ${fmtDate(item.arrivalTime)} • ${fmtTime(item.arrivalTime)}</div>
-            ${item.duration ? `<div class="sub-text">Duration: ${item.duration}</div>` : ''}
-        `;
-    } else if (category === 'stay') {
-        timeSection = `
-            <div class="time-row"><strong>Check In:</strong> ${fmtDate(item.checkIn)} at ${fmtTime(item.checkIn)}</div>
-            <div class="time-row"><strong>Check Out:</strong> ${fmtDate(item.checkOut)} at ${fmtTime(item.checkOut)}</div>
-        `;
-    } else if (category === 'transit') {
-        timeSection = `
-            <div class="time-row"><strong>Depart:</strong> ${fmtDate(item.departureTime)} • ${fmtTime(item.departureTime)}</div>
-            <div class="time-row"><strong>Arrive:</strong> ${fmtDate(item.arrivalTime)} • ${fmtTime(item.arrivalTime)}</div>
-        `;
-    } else {
-        // Activity
-        timeSection = `
-            <div class="time-row">${fmtDate(item.startTime)}</div>
-            <div class="time-row">${fmtTime(item.startTime)} - ${fmtTime(item.endTime)}</div>
-        `;
+    // Badge Logic
+    let badgeText = category.toUpperCase();
+    const formattedType = formatType(item.type);
+
+    // Only show Type if it's distinct from Category
+    if (item.type && formattedType.toUpperCase() !== category.toUpperCase()) {
+        badgeText = `${badgeText} • ${formattedType}`;
     }
 
-    // --- Location Data (Map Links) ---
-    let locationSection = '';
-
-    // Helper for map link
-    const renderMapLink = (label, query, appendSuffix = '') => {
-        if (!query) return '';
-        const searchQuery = appendSuffix ? `${query} ${appendSuffix}` : query;
-        return `
-            <div class="location-block">
-                <div class="location-label">${label}</div>
-                <div class="location-text">${query}</div>
-                <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(searchQuery)}" 
-                   target="_blank" class="map-link">🗺️ Open in Maps</a>
+    // --- Time Block ---
+    let timeBlock = '';
+    if (category === 'stay') {
+        timeBlock = `
+            <div class="info-grid user-select-none">
+                <div class="info-cell">
+                    <label>Check In</label>
+                    <div class="val">${fmtDateShort(item.checkIn)}</div>
+                    <div class="sub-val">${fmt(item.checkIn)}</div>
+                </div>
+                <div class="grid-arrow">➝</div>
+                <div class="info-cell">
+                    <label>Check Out</label>
+                    <div class="val">${fmtDateShort(item.checkOut)}</div>
+                    <div class="sub-val">${fmt(item.checkOut)}</div>
+                </div>
             </div>
         `;
-    };
+    } else {
+        const start = item.departureTime || item.startTime || item.startAt;
+        const end = item.arrivalTime || item.endTime || item.endAt;
+        if (start) {
+            const labelStart = category === 'flight' || category === 'transit' ? 'Depart' : 'Start';
+            const labelEnd = category === 'flight' || category === 'transit' ? 'Arrive' : 'End';
+
+            timeBlock = `
+                 <div class="info-grid user-select-none">
+                    <div class="info-cell">
+                        <label>${labelStart}</label>
+                        <div class="val">${fmtDateShort(start)}</div>
+                        <div class="sub-val">${fmt(start)}</div>
+                    </div>
+                    ${end ? `
+                        <div class="grid-arrow">➝</div>
+                        <div class="info-cell">
+                            <label>${labelEnd}</label>
+                            <div class="val">${fmtDateShort(end)}</div>
+                            <div class="sub-val">${fmt(end)}</div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+    }
+
+    // --- Location Block ---
+    let locationBlock = '';
+    const renderMapLink = (addr) => `
+        <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}" 
+           target="_blank" class="map-chip">Open in Maps ↗</a>
+    `;
 
     if (category === 'flight') {
-        // Show both airports with 'airport' suffix for better accuracy with 3-letter codes
-        if (item.departureAirport) locationSection += renderMapLink('Departure Airport', item.departureAirport, 'airport');
-        if (item.arrivalAirport) locationSection += renderMapLink('Arrival Airport', item.arrivalAirport, 'airport');
-    } else if (category === 'transit') {
-        if (item.type === 'rental_car') {
-            locationSection += renderMapLink('Pick-up Location', item.departureLocation);
-        } else {
-            if (item.departureLocation) locationSection += renderMapLink('Departure', item.departureLocation);
-            if (item.arrivalLocation) locationSection += renderMapLink('Arrival', item.arrivalLocation);
-        }
+        locationBlock = `
+            <div class="detail-row">
+                <div class="detail-icon-col">📍</div>
+                <div class="detail-content-col">
+                    ${item.departureAirport ? `
+                    <div class="airport-row">
+                        <span>Dep: <strong>${item.departureAirport}</strong></span>
+                        <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.departureAirport + ' airport')}" target="_blank" class="map-link-sm">Map</a>
+                    </div>` : ''}
+                    ${item.arrivalAirport ? `
+                    <div class="airport-row">
+                        <span>Arr: <strong>${item.arrivalAirport}</strong></span>
+                        <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.arrivalAirport + ' airport')}" target="_blank" class="map-link-sm">Map</a>
+                    </div>` : ''}
+                </div>
+            </div>
+         `;
     } else {
-        // Stays and Activities usually have one main address/location
-        const loc = item.address || item.location;
-        if (loc) {
-            locationSection += renderMapLink('Location', loc);
+        // Stays, Activities, Transit (non-flight)
+        const depRaw = item.departureLocation;
+        const arrRaw = item.arrivalLocation;
+        const singleRaw = item.address || item.location;
+
+        const depLoc = extractLocationString(depRaw);
+        const arrLoc = extractLocationString(arrRaw);
+        const singleLoc = extractLocationString(singleRaw || depRaw); // Fallback to dep if no address/location
+
+        if (depLoc && arrLoc && depLoc !== arrLoc) {
+            // Route View (Start -> End)
+            locationBlock = `
+                <div class="detail-row">
+                    <div class="detail-icon-col">📍</div>
+                    <div class="detail-content-col">
+                        <div style="margin-bottom: 8px;">
+                            <span class="sub-text" style="font-size: 10px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">From</span>
+                            <div class="detail-text">${depLoc}</div>
+                        </div>
+                        <div>
+                            <span class="sub-text" style="font-size: 10px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">To</span>
+                            <div class="detail-text">${arrLoc}</div>
+                        </div>
+                        <a href="https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(depLoc)}&destination=${encodeURIComponent(arrLoc)}" 
+                           target="_blank" class="map-chip" style="margin-top: 8px;">View Route ↗</a>
+                    </div>
+                </div>
+            `;
+        } else if (singleLoc) {
+            // Single Location View
+            locationBlock = `
+                <div class="detail-row">
+                    <div class="detail-icon-col">📍</div>
+                    <div class="detail-content-col">
+                        <div class="detail-text">${singleLoc}</div>
+                        ${renderMapLink(singleLoc)}
+                    </div>
+                </div>
+            `;
         }
     }
 
-    // --- Cost Data ---
-    let costText = '';
-    if (item.cost) {
-        const amount = typeof item.cost === 'object' ? item.cost.amount : item.cost;
-        const currency = (typeof item.cost === 'object' ? item.cost.currency : 'USD') || 'USD';
-        if (amount) {
-            costText = `$${Number(amount).toLocaleString()} ${currency}`;
-        }
+    // --- Travelers Block ---
+    let travelersBlock = '';
+    const trip = window.store?.getActiveTrip();
+    let travelerNames = [];
+    if (item.travelers && trip) {
+        travelerNames = item.travelers.map(tid => {
+            const t = trip.travelers.find(tr => tr.id === tid || tr.id === tid.id); // handle obj or id
+            return t ? t.name : null;
+        }).filter(Boolean);
+    } else if (item.travelers && typeof item.travelers[0] === 'object') {
+        travelerNames = item.travelers.map(t => t.name);
     }
 
-    // Smart Header: Hide type if redundant (e.g. FLIGHT • FLIGHT -> FLIGHT)
-    const typeLabel = (item.type && item.type.toLowerCase() !== category.toLowerCase())
-        ? `${category} • ${item.type}`
-        : category;
+    if (travelerNames.length > 0) {
+        travelersBlock = `
+            <div class="detail-row">
+                <div class="detail-icon-col">👥</div>
+                <div class="detail-content-col">
+                    <div class="travelers-list">
+                        ${travelerNames.map(name => `<span class="traveler-chip">${name}</span>`).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
 
+    // --- Cost & Payer Block ---
+    let costBlock = '';
+    let cost = item.cost;
+    if (!cost && item.metadata?.cost) cost = item.metadata.cost;
+
+    if (cost && (cost.amount || cost.amount === 0)) {
+        let payerName = '';
+        const paidById = item.paidBy || cost.paidBy || item.metadata?.cost?.paidBy;
+        if (paidById && trip) {
+            const p = trip.travelers.find(t => t.id === paidById);
+            if (p) payerName = p.name;
+        }
+
+        const payerText = payerName ? `<span class="payer-badge">Paid by ${payerName}</span>` : '';
+        const currency = cost.currency || 'USD';
+
+        costBlock = `
+            <div class="detail-row">
+                <div class="detail-icon-col">💰</div>
+                <div class="detail-content-col" style="display: flex; flex-direction: column; gap: 4px;">
+                    <div class="detail-text">$${Number(cost.amount).toLocaleString()} ${currency}</div>
+                    ${payerText}
+                </div>
+            </div>
+        `;
+    }
 
     return `
-        <div class="details-view">
+        <div class="item-details-modal">
             <!-- HEADER -->
-            <div class="details-header">
-                <div class="header-content">
-                    <div class="header-icon">${getIcon(category, item.type)}</div>
-                    <div class="header-text">
-                        <div class="type-label">
-                            ${typeLabel}
-                            <div class="status-badge ${isBooked ? 'booked' : 'planned'}">
-                                ${isBooked ? '✅ BOOKED' : '💭 PLANNED'}
-                            </div>
+            <div class="item-details-header">
+                <div class="header-main">
+                    <div class="header-icon-box">${getIcon(category, item.type)}</div>
+                    <div class="title-area">
+                        <div class="eyebrow-badge">
+                            <span class="status-dot ${isBooked ? 'booked' : 'planned'}"></span>
+                            ${badgeText}
                         </div>
-                        <h2 class="title">${title}</h2>
-                        ${subtitle ? `<div class="subtitle" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; white-space: normal;">${subtitle}</div>` : ''}
+                        <h2>${title}</h2>
+                        ${eyebrow ? `<div class="sub">${eyebrow}</div>` : ''}
                     </div>
                 </div>
             </div>
 
             <!-- BODY -->
-            <div class="details-body">
+            <div class="item-details-body">
+                ${timeBlock}
                 
-                <!-- TIME -->
-                <div class="section icon-row">
-                    <div class="section-row">
-                        <span class="icon">📅</span>
-                        <div class="section-content">
-                            ${timeSection}
-                        </div>
+                <div class="detail-section">
+                    ${travelersBlock}
+                    
+                    ${locationBlock}
+
+                    ${costBlock}
+
+                    ${item.notes ? `
+                    <div class="notes-box">
+                        <span class="notes-label">Notes</span>
+                        <div class="notes-text">${item.notes}</div>
                     </div>
+                    ` : ''}
                 </div>
-
-                <!-- LOCATION -->
-                ${locationSection ? `
-                    <div class="section icon-row">
-                        <div class="section-row">
-                            <span class="icon">📍</span>
-                            <div class="section-content">
-                                ${locationSection}
-                            </div>
-                        </div>
-                    </div>
-                ` : ''}
-
-                <!-- NOTES -->
-                ${item.notes ? `
-                    <div class="section">
-                         <div class="section-header">Notes</div>
-                         <div class="notes-box">
-                             ${item.notes}
-                         </div>
-                    </div>
-                ` : ''}
-
-                <!-- COST -->
-                ${costText ? `
-                    <div class="section icon-row">
-                        <div class="section-row">
-                             <span class="icon">💰</span>
-                             <div class="section-content">
-                                 <div class="cost-amount">${costText}</div>
-                             </div>
-                        </div>
-                    </div>
-                ` : ''}
-
             </div>
 
             <!-- FOOTER -->
-            <div class="details-footer">
-                <button class="btn btn-secondary" id="details-edit-btn" data-id="${item.id}" data-category="${category}">✏️ Edit</button>
-                <button class="btn btn-primary" id="details-close-btn">Done</button>
+            <div class="item-details-footer">
+                <button class="btn btn-edit" id="details-edit-btn" data-id="${item.id}" data-category="${category}">✏️ Edit</button>
+                <button class="btn btn-done" id="details-close-btn">Done</button>
             </div>
         </div>
     `;

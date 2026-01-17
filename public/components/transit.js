@@ -144,6 +144,7 @@ export function renderTransitForm(transit = null) {
             <option value="ferry" ${data.type === 'ferry' ? 'selected' : ''}>Ferry</option>
             <option value="taxi" ${data.type === 'taxi' ? 'selected' : ''}>Taxi / Uber</option>
             <option value="rental_car" ${data.type === 'rental_car' ? 'selected' : ''}>Rental Car</option>
+            <option value="drive" ${data.type === 'drive' ? 'selected' : ''}>Drive</option>
           </select>
         </div>
 

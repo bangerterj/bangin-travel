@@ -328,10 +328,7 @@ export const store = {
           const idx = items.findIndex(i => i.id === itemData.id);
           if (idx !== -1) {
             items[idx] = flatItem;
-            // items[idx] is a reference to the object in this.data, so this updates the store
-            items[idx] = flatItem;
-            // Force refresh to ensure full consistency with DB (anti-caching headers added to TripService)
-            await this.fetchTrips();
+            // Force refresh skipped to avoid stale reads; trust API response
             this.save();
             return true;
           }
@@ -385,9 +382,14 @@ export const store = {
         console.log('[DELETE] Making API call to /api/items/' + itemId);
         await TripService.deleteItem(itemId);
 
-        // Success (no error thrown)
-        // Refresh entire trip to be safe and ensure sync
-        await this.fetchTrips();
+        // Success (no error thrown) - manually remove from local store
+        const items = trip[collectionKey];
+        if (items) {
+          const index = items.findIndex(i => i.id === itemId);
+          if (index !== -1) items.splice(index, 1);
+        }
+
+        this.save();
         return true;
 
       } catch (e) {
@@ -416,7 +418,6 @@ export const store = {
         if (newTraveler) {
           if (!trip.travelers) trip.travelers = [];
           trip.travelers.push(newTraveler);
-          await this.fetchTrips();
           this.save();
           return newTraveler;
         }
@@ -449,7 +450,6 @@ export const store = {
           const idx = trip.travelers.findIndex(t => t.id === travelerData.id);
           if (idx !== -1) {
             trip.travelers[idx] = updated;
-            await this.fetchTrips();
             this.save();
             return true;
           }
@@ -475,7 +475,6 @@ export const store = {
       try {
         await TripService.deleteTraveler(travelerId);
         trip.travelers = trip.travelers.filter(t => t.id !== travelerId);
-        await this.fetchTrips();
         this.save();
         return true;
       } catch (e) {
