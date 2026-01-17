@@ -1,0 +1,435 @@
+/* Base Layout */
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 40px 20px;
+    font-family: 'Outfit', sans-serif;
+    color: #2c3e50;
+    min-height: 100vh;
+}
+
+/* Typography */
+.hero {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+    background: linear-gradient(135deg, #3498db, #8e44ad);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+    font-size: 1.1rem;
+    color: #7f8c8d;
+}
+
+.question {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: #34495e;
+}
+
+/* Card Container */
+.card {
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+    padding: 40px;
+    transition: all 0.3s ease;
+}
+
+/* Form Elements */
+.inputGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.input {
+    width: 100%;
+    padding: 15px;
+    font-size: 1.1rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    transition: border-color 0.2s;
+    font-family: 'Outfit', sans-serif;
+}
+
+.input:focus {
+    outline: none;
+    border-color: #3498db;
+}
+
+.button {
+    background: #2c3e50;
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.2s;
+    width: 100%;
+}
+
+.button:hover {
+    background: #34495e;
+    transform: translateY(-2px);
+}
+
+.button:disabled {
+    background: #bdc3c7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.secondaryButton {
+    background: transparent;
+    color: #7f8c8d;
+    border: none;
+    padding: 10px;
+    cursor: pointer;
+    font-weight: 500;
+    text-decoration: underline;
+}
+
+.secondaryButton:hover {
+    color: #34495e;
+}
+
+/* Chips */
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.chipsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+}
+
+.chip {
+    padding: 10px 20px;
+    border-radius: 30px;
+    border: 1px solid #e0e0e0;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.95rem;
+}
+
+.chip:hover {
+    background: #f8f9fa;
+    border-color: #dcdcdc;
+}
+
+.chip.selected {
+    background: #3498db;
+    color: white;
+    border-color: #3498db;
+}
+
+/* Slider */
+.sliderContainer {
+    padding: 20px 0;
+}
+
+.sliderLabels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+    color: #7f8c8d;
+    font-size: 0.9rem;
+}
+
+/* Insights & Loading */
+.insightBox {
+    background: #e8f6ff;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 4px solid #3498db;
+    margin-bottom: 20px;
+    color: #2980b9;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 10px auto;
+}
+
+.loaderText {
+    color: #7f8c8d;
+    font-size: 0.9rem;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Previews Layout */
+.previewsContainer {
+    position: relative;
+    overflow: hidden;
+    /* For mobile slider */
+    padding-bottom: 20px;
+}
+
+.previewGrid {
+    display: flex;
+    /* Mobile default: Slider */
+    width: 100%;
+    transition: transform 0.3s ease-out;
+    transform: translateX(calc(-100% * var(--current-index)));
+}
+
+.previewCard {
+    background: #ffffff;
+    border: 3px solid #2c3e50;
+    border-radius: 12px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 6px 6px 0px 0px #2c3e50;
+
+    /* Mobile: Full width of container */
+    flex: 0 0 100%;
+    width: 100%;
+    box-sizing: border-box;
+
+    display: flex;
+    flex-direction: column;
+    min-height: 400px;
+    /* Taller cards as requested */
+}
+
+/* Mobile Controls */
+.mobileControls {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 15px;
+}
+
+.pageIndicator {
+    background: #2c3e50;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.mobileNav {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+}
+
+.navButton {
+    background: white;
+    border: 2px solid #2c3e50;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 2px 2px 0px 0px #2c3e50;
+}
+
+.navButton:active {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+}
+
+.navButton:disabled {
+    opacity: 0.3;
+    cursor: default;
+    box-shadow: none;
+    transform: translate(2px, 2px);
+}
+
+/* Desktop Styles */
+@media (min-width: 768px) {
+    .previewsContainer {
+        overflow: visible;
+        /* No clipping needed on grid */
+    }
+
+    .previewGrid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        /* 3 side-by-side */
+        gap: 20px;
+        transform: none !important;
+        /* Disable slider transform */
+    }
+
+    .previewCard {
+        width: auto;
+        flex: none;
+    }
+
+    .previewCard:hover {
+        transform: translate(-3px, -3px);
+        box-shadow: 8px 8px 0px 0px #2c3e50;
+    }
+
+    /* Hide mobile controls on desktop */
+    .mobileControls,
+    .mobileNav {
+        display: none;
+    }
+}
+
+
+.previewTitle {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #2c3e50;
+}
+
+.tag {
+    display: inline-block;
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: #f8f4eb;
+    border: 1px solid #2c3e50;
+    color: #2c3e50;
+    margin-right: 8px;
+    margin-bottom: 8px;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+}
+
+/* Itinerary List */
+.itineraryList {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.dayItem {
+    display: flex;
+    gap: 15px;
+    padding: 15px;
+    border-radius: 12px;
+    background: #ffffff;
+    border: 2px solid #f0f0f0;
+    transition: transform 0.1s;
+}
+
+.dayItem:hover {
+    border-color: #3498db;
+}
+
+.itemIcon {
+    font-size: 1.5rem;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8f9fa;
+    border-radius: 50%;
+}
+
+.itemContent {
+    flex: 1;
+}
+
+.itemTitle {
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 4px;
+    font-family: 'Outfit', sans-serif;
+}
+
+.itemNotes {
+    font-size: 0.95rem;
+    color: #5d6d7e;
+    line-height: 1.4;
+}
+
+/* Loading Overlay */
+.loadingOverlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.95);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    backdrop-filter: blur(5px);
+    border-radius: 12px;
+}
+
+.loadingText {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.5rem;
+    color: #2c3e50;
+    margin-top: 20px;
+    font-weight: 600;
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+.spinner {
+    width: 60px;
+    height: 60px;
+    border: 5px solid #ecf0f1;
+    border-top: 5px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

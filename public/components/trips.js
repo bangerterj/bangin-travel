@@ -135,25 +135,24 @@ export function renderTripSetupForm() {
 
         <div class="form-group">
             <label for="trip-timezone">Timezone</label>
-            <select id="trip-timezone" class="form-select">
-                <option value="UTC">UTC</option>
-                ${Intl.supportedValuesOf('timeZone').map(tz =>
+            <div class="select-wrapper">
+                <select id="trip-timezone" class="form-input">
+                    <option value="UTC">UTC</option>
+                    ${Intl.supportedValuesOf('timeZone').map(tz =>
     `<option value="${tz}" ${tz === Intl.DateTimeFormat().resolvedOptions().timeZone ? 'selected' : ''}>${tz}</option>`
   ).join('')}
-            </select>
+                </select>
+            </div>
             <small class="text-secondary">Used for calendar and itinerary timing.</small>
         </div>
         
-        <div class="form-row">
-          <div class="form-group">
-            <label for="trip-start-date">Start Date *</label>
-            <input type="date" id="trip-start-date" value="${formatDateInput(today)}" required>
-          </div>
-          <div class="form-group">
-            <label for="trip-end-date">End Date *</label>
-            <input type="date" id="trip-end-date" value="${formatDateInput(nextWeek)}" required>
-          </div>
+        <div class="form-group">
+            <label>Trip Dates</label>
+            <input type="text" id="trip-range-picker" class="form-input" placeholder="Select dates..." required>
         </div>
+        
+        <input type="hidden" id="trip-start-date" value="">
+        <input type="hidden" id="trip-end-date" value="">
 
         <div id="trip-form-error" class="form-error hidden">Please fill in all required fields.</div>
         
@@ -345,7 +344,13 @@ export function renderInviteModal(trip) {
 export function renderTripEditForm(trip) {
   const formatDateInput = (dateStr) => {
     if (!dateStr) return '';
-    return new Date(dateStr).toISOString().split('T')[0];
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '';
+      return d.toISOString().split('T')[0];
+    } catch (e) {
+      return '';
+    }
   };
 
   return `
@@ -364,16 +369,13 @@ export function renderTripEditForm(trip) {
           <input type="text" id="edit-trip-destination" value="${trip.destination}" required>
         </div>
         
-        <div class="form-row">
-          <div class="form-group">
-            <label for="edit-trip-start-date">Start Date *</label>
-            <input type="date" id="edit-trip-start-date" value="${formatDateInput(trip.startDate)}" required>
-          </div>
-          <div class="form-group">
-            <label for="edit-trip-end-date">End Date *</label>
-            <input type="date" id="edit-trip-end-date" value="${formatDateInput(trip.endDate)}" required>
-          </div>
+        <div class="form-group">
+            <label>Trip Dates</label>
+            <input type="text" id="edit-trip-range-picker" class="form-input" placeholder="Select dates..." required>
         </div>
+
+        <input type="hidden" id="edit-trip-start-date" value="${formatDateInput(trip.startDate)}">
+        <input type="hidden" id="edit-trip-end-date" value="${formatDateInput(trip.endDate)}">
 
         <div id="edit-trip-error" class="form-error hidden">Please fill in all required fields.</div>
         

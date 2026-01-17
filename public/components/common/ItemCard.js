@@ -8,7 +8,7 @@
 const getIcon = (cat, type) => {
     const map = {
         flight: '✈️', stay: '🏨', activity: '📍', transit: '🚆',
-        airbnb: '🏠', hostel: '🛏️', train: '🚄', bus: '🚌', rental_car: '🚗', drive: '🚗',
+        airbnb: '🏠', hostel: '🛏️', camping: '⛺', train: '🚄', bus: '🚌', rental_car: '🚗', drive: '🚗',
         dining: '🍽️'
     };
     // Fallback to category icon if type icon not found
@@ -48,7 +48,8 @@ export function renderItemCard(item, category, callbacks = {}) {
         contextText = item.airline || 'Flight';
     } else if (category === 'stay') {
         contextText = item.type === 'airbnb' ? 'Airbnb' :
-            item.type === 'hostel' ? 'Hostel' : 'Hotel';
+            item.type === 'hostel' ? 'Hostel' :
+                item.type === 'camping' ? 'Camping' : 'Hotel';
     } else if (category === 'transit') {
         contextText = item.type === 'rental_car' ? 'Rental' :
             item.type === 'drive' ? 'Drive' :

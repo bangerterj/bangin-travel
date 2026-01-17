@@ -188,44 +188,55 @@ export function renderFlightForm(flight = null, store = null) {
         <div class="form-row">
             <div class="form-group">
                 <label for="airline">Airline</label>
-                <input type="text" name="airline" value="${data.airline}" placeholder="e.g. United" required>
+                <input type="text" name="airline" value="${data.airline}" placeholder="e.g. United" required class="form-input">
             </div>
             <div class="form-group">
                 <label for="flightNumber">Flight Number</label>
-                <input type="text" name="flightNumber" value="${data.flightNumber}" placeholder="e.g. UA 123" required>
+                <input type="text" name="flightNumber" value="${data.flightNumber}" placeholder="e.g. UA 123" required class="form-input">
             </div>
         </div>
 
         <div class="form-row">
             <div class="form-group">
                 <label for="departureAirport">Dep Airport</label>
-                <input type="text" name="departureAirport" value="${data.departureAirport}" placeholder="e.g. SFO" required>
+                <input type="text" name="departureAirport" value="${data.departureAirport}" placeholder="e.g. SFO" required class="form-input">
             </div>
             <div class="form-group">
                 <label for="arrivalAirport">Arr Airport</label>
-                <input type="text" name="arrivalAirport" value="${data.arrivalAirport}" placeholder="e.g. NRT" required>
+                <input type="text" name="arrivalAirport" value="${data.arrivalAirport}" placeholder="e.g. NRT" required class="form-input">
             </div>
         </div>
 
+        <!-- Dates -->
+        <div class="form-group">
+            <label>Date Range (Dep ➝ Arr)</label>
+            <input type="text" id="flight-range-picker" class="form-input" placeholder="Select flight dates..." required>
+        </div>
+
+        <!-- Times -->
         <div class="form-row">
             <div class="form-group">
-                 <label for="departureTime">Dep Time (Local${depOffset})</label>
-                 <input type="datetime-local" name="departureTime" value="${formatDateForInput(data.startAt || data.departureTime, data.departureTimezone || data.metadata?.departureTimezone)}" required>
+                 <label>Dep Time (Local${depOffset})</label>
+                 <input type="text" id="flight-dep-time-picker" class="form-input" value="${data.startAt ? new Date(data.startAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : (data.departureTime ? new Date(data.departureTime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '09:00')}" required>
             </div>
             <div class="form-group">
-                 <label for="arrivalTime">Arr Time (Local${arrOffset})</label>
-                 <input type="datetime-local" name="arrivalTime" value="${formatDateForInput(data.endAt || data.arrivalTime, data.arrivalTimezone || data.metadata?.arrivalTimezone)}" required>
+                 <label>Arr Time (Local${arrOffset})</label>
+                 <input type="text" id="flight-arr-time-picker" class="form-input" value="${data.endAt ? new Date(data.endAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : (data.arrivalTime ? new Date(data.arrivalTime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '11:00')}" required>
             </div>
         </div >
+
+        <!-- Hidden inputs for validation/submission -->
+        <input type="hidden" name="departureTime" id="departureTime" value="${data.startAt || data.departureTime || ''}">
+        <input type="hidden" name="arrivalTime" id="arrivalTime" value="${data.endAt || data.arrivalTime || ''}">
 
         <div class="form-row">
             <div class="form-group">
                 <label for="duration">Duration</label>
-                <input type="text" name="duration" value="${data.duration || ''}" placeholder="e.g. 11h 20m">
+                <input type="text" name="duration" value="${data.duration || ''}" placeholder="e.g. 11h 20m" class="form-input">
             </div>
             <div class="form-group">
                 <label for="cost">Cost (Total)</label>
-                <input type="number" name="cost.amount" value="${data.cost?.amount || data.metadata?.cost?.amount || ''}" placeholder="0.00" step="0.01" min="0" class="currency-input">
+                <input type="number" name="cost.amount" value="${data.cost?.amount || data.metadata?.cost?.amount || ''}" placeholder="0.00" step="0.01" min="0" class="currency-input form-input">
                 <input type="hidden" name="cost.currency" value="${data.cost?.currency || 'USD'}">
             </div>
         </div>

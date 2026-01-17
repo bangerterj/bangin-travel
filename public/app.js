@@ -679,7 +679,7 @@ class App {
                     store.setActiveTrip(id);
                     this.render();
                 },
-                onEditTrip: () => this.handleTripEdit(store.getActiveTrip()),
+                onSettings: () => this.handleTripEdit(store.getActiveTrip()),
                 onAllTrips: () => {
                     store.setActiveTrip(null);
                     this.render();
@@ -717,6 +717,28 @@ class App {
 
         // Setup Autocomplete for Destination
         const destInput = document.getElementById('trip-destination');
+
+        // Setup Date Range Picker
+        const dateRangeInput = document.getElementById('trip-range-picker');
+        const startDateInput = document.getElementById('trip-start-date');
+        const endDateInput = document.getElementById('trip-end-date');
+
+        if (dateRangeInput && startDateInput && endDateInput && window.flatpickr) {
+            flatpickr(dateRangeInput, {
+                mode: "range",
+                dateFormat: "Y-m-d",
+                altInput: true,
+                altFormat: "M j, Y",
+                minDate: "today",
+                defaultDate: [startDateInput.value, endDateInput.value],
+                onChange: (selectedDates) => {
+                    const d1 = selectedDates[0];
+                    const d2 = selectedDates[1] || d1;
+                    if (d1) startDateInput.value = flatpickr.formatDate(d1, "Y-m-d");
+                    if (d2) endDateInput.value = flatpickr.formatDate(d2, "Y-m-d");
+                }
+            });
+        }
 
         // Give it a name so hidden inputs are named 'destination.coordinates.lat/lng'
         if (destInput) {
@@ -973,6 +995,249 @@ class App {
     bindEntityForm(type, item) {
         console.log('[TRACE] bindEntityForm START:', type);
         const form = document.getElementById(`${type}-form`);
+
+        // --- FLATPICKR INITIALIZATION ---
+        if (window.flatpickr && form) {
+            // 1. Stay Range Picker
+            // 1. Stay Range Picker (Separated Date/Time)
+            const stayRange = form.querySelector('#stay-range-picker');
+            const inTimeInput = form.querySelector('#stay-checkin-time');
+            const outTimeInput = form.querySelector('#stay-checkout-time');
+            const hiddenIn = form.querySelector('#checkIn');
+            const hiddenOut = form.querySelector('#checkOut');
+
+            if (stayRange && inTimeInput && outTimeInput) {
+                const updateHiddenValues = (dates) => {
+                    if (!dates || dates.length < 2) return;
+
+                    const date1 = flatpickr.formatDate(dates[0], "Y-m-d");
+                    const date2 = flatpickr.formatDate(dates[1], "Y-m-d");
+                    const time1 = inTimeInput.value || "15:00";
+                    const time2 = outTimeInput.value || "11:00";
+
+                    if (hiddenIn) hiddenIn.value = `${date1}T${time1}`;
+                    if (hiddenOut) hiddenOut.value = `${date2}T${time2}`;
+                };
+
+                const checkInVal = hiddenIn?.value;
+                const checkOutVal = hiddenOut?.value;
+                const defaultDate = (checkInVal && checkOutVal) ? [checkInVal, checkOutVal] : null;
+
+                const fp = flatpickr(stayRange, {
+                    mode: "range",
+                    enableTime: false,
+                    dateFormat: "Y-m-d",
+                    altInput: true,
+                    altFormat: "M j, Y",
+                    defaultDate: defaultDate,
+                    minDate: "today",
+                    onChange: (selectedDates) => {
+                        updateHiddenValues(selectedDates);
+                    }
+                });
+
+                // Bind time inputs to update hidden values
+                const onTimeChange = () => {
+                    if (fp.selectedDates.length === 2) {
+                        updateHiddenValues(fp.selectedDates);
+                    }
+                };
+                inTimeInput.addEventListener('change', onTimeChange);
+                outTimeInput.addEventListener('change', onTimeChange);
+            }
+
+            // 2. Flight Picker (Range + Separated Times)
+            const flightRange = form.querySelector('#flight-range-picker');
+            const depTimeInput = form.querySelector('#flight-dep-time-picker');
+            const arrTimeInput = form.querySelector('#flight-arr-time-picker');
+            const hiddenDep = form.querySelector('#departureTime');
+            const hiddenArr = form.querySelector('#arrivalTime');
+
+            if (flightRange && depTimeInput && arrTimeInput) {
+                const updateFlightValues = (dates) => {
+                    const d1 = dates && dates.length > 0 ? dates[0] : null;
+                    const d2 = dates && dates.length > 1 ? dates[1] : d1; // Default to same-day if range incomplete
+
+                    if (!d1) return;
+
+                    const date1 = flatpickr.formatDate(d1, "Y-m-d");
+                    const date2 = flatpickr.formatDate(d2, "Y-m-d");
+                    const time1 = depTimeInput.value || "09:00";
+                    const time2 = arrTimeInput.value || "11:00";
+
+                    if (hiddenDep) {
+                        hiddenDep.value = `${date1}T${time1}`;
+                        hiddenDep.dispatchEvent(new Event('blur')); // Trigger duration calc
+                    }
+                    if (hiddenArr) {
+                        hiddenArr.value = `${date2}T${time2}`;
+                        hiddenArr.dispatchEvent(new Event('blur')); // Trigger duration calc
+                    }
+                };
+
+                const depVal = hiddenDep?.value;
+                const arrVal = hiddenArr?.value;
+                const defaultDate = (depVal && arrVal) ? [depVal, arrVal] : (depVal ? [depVal, depVal] : null);
+
+                const fp = flatpickr(flightRange, {
+                    mode: "range",
+                    enableTime: false,
+                    dateFormat: "Y-m-d",
+                    altInput: true,
+                    altFormat: "M j, Y",
+                    defaultDate: defaultDate,
+                    minDate: "today",
+                    onChange: (selectedDates) => {
+                        updateFlightValues(selectedDates);
+                    }
+                });
+
+                const onTimeChange = () => {
+                    if (fp.selectedDates.length > 0) {
+                        updateFlightValues(fp.selectedDates);
+                    }
+                };
+                depTimeInput.addEventListener('change', onTimeChange);
+                arrTimeInput.addEventListener('change', onTimeChange);
+            }
+
+            // 3. Transit Picker (Range + Separated Times)
+            const transitRange = form.querySelector('#transit-range-picker');
+            const transitDepInput = form.querySelector('#transit-dep-time-picker');
+            const transitArrInput = form.querySelector('#transit-arr-time-picker');
+            const hiddenTransitDep = form.querySelector('#departureTime');
+            const hiddenTransitArr = form.querySelector('#arrivalTime');
+
+            if (transitRange && transitDepInput && transitArrInput) {
+                const updateTransitValues = (dates) => {
+                    const d1 = dates && dates.length > 0 ? dates[0] : null;
+                    const d2 = dates && dates.length > 1 ? dates[1] : d1;
+
+                    if (!d1) return;
+
+                    const date1 = flatpickr.formatDate(d1, "Y-m-d");
+                    const date2 = flatpickr.formatDate(d2, "Y-m-d");
+                    const time1 = transitDepInput.value || "09:00";
+                    const time2 = transitArrInput.value || "10:00";
+
+                    if (hiddenTransitDep) hiddenTransitDep.value = `${date1}T${time1}`;
+                    if (hiddenTransitArr) hiddenTransitArr.value = `${date2}T${time2}`;
+
+                    // Trigger validation if any
+                    hiddenTransitDep?.dispatchEvent(new Event('blur'));
+                    hiddenTransitArr?.dispatchEvent(new Event('blur'));
+                };
+
+                const depVal = hiddenTransitDep?.value;
+                const arrVal = hiddenTransitArr?.value;
+                const defaultDate = (depVal && arrVal) ? [depVal, arrVal] : (depVal ? [depVal, depVal] : null);
+
+                const fp = flatpickr(transitRange, {
+                    mode: "range",
+                    enableTime: false,
+                    dateFormat: "Y-m-d",
+                    altInput: true,
+                    altFormat: "M j, Y",
+                    defaultDate: defaultDate,
+                    minDate: "today",
+                    onChange: (selectedDates) => updateTransitValues(selectedDates)
+                });
+
+                const onTimeChange = () => {
+                    if (fp.selectedDates.length > 0) updateTransitValues(fp.selectedDates);
+                };
+                transitDepInput.addEventListener('change', onTimeChange);
+                transitArrInput.addEventListener('change', onTimeChange);
+            }
+
+            // 4. Activity Picker (Range + Separated Times)
+            const activityRange = form.querySelector('#activity-range-picker');
+            const activityStartInput = form.querySelector('#activity-start-time-picker');
+            const activityEndInput = form.querySelector('#activity-end-time-picker');
+            const hiddenActStart = form.querySelector('#startTime');
+            const hiddenActEnd = form.querySelector('#endTime');
+
+            if (activityRange && activityStartInput && activityEndInput) {
+                const updateActivityValues = (dates) => {
+                    const d1 = dates && dates.length > 0 ? dates[0] : null;
+                    const d2 = dates && dates.length > 1 ? dates[1] : d1;
+
+                    if (!d1) return;
+
+                    const date1 = flatpickr.formatDate(d1, "Y-m-d");
+                    const date2 = flatpickr.formatDate(d2, "Y-m-d");
+                    const time1 = activityStartInput.value || "10:00";
+                    const time2 = activityEndInput.value || "12:00";
+
+                    if (hiddenActStart) hiddenActStart.value = `${date1}T${time1}`;
+                    if (hiddenActEnd) hiddenActEnd.value = `${date2}T${time2}`;
+                };
+
+                const startVal = hiddenActStart?.value;
+                const endVal = hiddenActEnd?.value;
+                const defaultDate = (startVal && endVal) ? [startVal, endVal] : (startVal ? [startVal, startVal] : null);
+
+                const fp = flatpickr(activityRange, {
+                    mode: "range",
+                    enableTime: false,
+                    dateFormat: "Y-m-d",
+                    altInput: true,
+                    altFormat: "M j, Y",
+                    defaultDate: defaultDate,
+                    minDate: "today",
+                    onChange: (selectedDates) => updateActivityValues(selectedDates)
+                });
+
+                // Initialize standalone time pickers for Activity Start/End
+                const timeConfig = {
+                    enableTime: true,
+                    noCalendar: true,
+                    dateFormat: "H:i",
+                    altInput: true,
+                    altFormat: "h:i K",
+                    time_24hr: false,
+                    onChange: () => {
+                        if (fp.selectedDates.length > 0) updateActivityValues(fp.selectedDates);
+                    }
+                };
+
+                flatpickr(activityStartInput, timeConfig);
+                flatpickr(activityEndInput, timeConfig);
+
+                const onTimeChange = () => {
+                    if (fp.selectedDates.length > 0) updateActivityValues(fp.selectedDates);
+                };
+                activityStartInput.addEventListener('change', onTimeChange);
+                activityEndInput.addEventListener('change', onTimeChange);
+            }
+
+            // 5. Standalone Time Pickers (12h)
+            const timePickers = form.querySelectorAll('.time-picker');
+            if (timePickers.length > 0) {
+                flatpickr(timePickers, {
+                    enableTime: true,
+                    noCalendar: true,
+                    dateFormat: "H:i", // keeps 24h value
+                    altInput: true,
+                    altFormat: "h:i K", // 12h display
+                    time_24hr: false
+                });
+            }
+
+            // 4. Generic Date Pickers
+            const genericPickers = form.querySelectorAll('.date-picker:not(#flight-dep-time):not(#flight-arr-time)');
+            if (genericPickers.length > 0) {
+                flatpickr(genericPickers, {
+                    enableTime: true,
+                    dateFormat: "Y-m-d H:i",
+                    altInput: true,
+                    altFormat: "M j, h:i K",
+                    time_24hr: false
+                });
+            }
+        }
+        // --------------------------------
+
         // ... (rest of bindEntityForm code) ...
 
         console.log('[TRACE] Form element:', form);
@@ -1530,11 +1795,18 @@ class App {
     }
 
     handleTripEdit() {
+        console.log('[DEBUG] handleTripEdit called');
         const trip = store.getActiveTrip();
-        if (!trip) return;
+        if (!trip) {
+            console.error('[DEBUG] No active trip found');
+            return;
+        }
 
         console.log('[DEBUG] Opening Edit Trip modal for:', trip.id);
-        this.openModal(renderTripEditForm(trip));
+        const formContent = renderTripEditForm(trip);
+        console.log('[DEBUG] Form content generated:', formContent ? 'YES' : 'NO');
+
+        this.openModal(formContent);
 
         const bindEvents = () => {
             const form = document.getElementById('trip-edit-form');
@@ -1554,6 +1826,33 @@ class App {
             if (destInput) {
                 destInput.name = 'destination'; // Required for hidden inputs naming
                 this.setupLocationAutocomplete(destInput, true);
+            }
+
+            // Setup Date Range Picker for Edit
+            const dateRangeInput = document.getElementById('edit-trip-range-picker');
+            const startDateInput = document.getElementById('edit-trip-start-date');
+            const endDateInput = document.getElementById('edit-trip-end-date');
+
+            if (dateRangeInput && startDateInput && endDateInput && window.flatpickr) {
+                try {
+                    flatpickr(dateRangeInput, {
+                        mode: "range",
+                        dateFormat: "Y-m-d",
+                        altInput: true,
+                        altFormat: "M j, Y",
+                        defaultDate: [startDateInput.value, endDateInput.value],
+                        onChange: (selectedDates) => {
+                            try {
+                                const d1 = selectedDates[0];
+                                const d2 = selectedDates[1] || d1;
+                                if (d1) startDateInput.value = flatpickr.formatDate(d1, "Y-m-d");
+                                if (d2) endDateInput.value = flatpickr.formatDate(d2, "Y-m-d");
+                            } catch (err) { console.error("Validation error", err); }
+                        }
+                    });
+                } catch (e) {
+                    console.error("Flatpickr init failed", e);
+                }
             }
 
             cancelBtn?.addEventListener('click', () => this.closeModal());

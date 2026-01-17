@@ -93,6 +93,14 @@ export function renderCalendar(container, store, callbacks) {
              <button id="timeline-next" class="btn-nav" title="Next ${state.viewMode}">▶</button>
              ${state.viewMode === 'day' ? `<button id="timeline-back" class="btn-nav">Week View</button>` : ''}
           </div>
+
+          <div class="calendar-legend" style="display: flex; gap: 16px; font-size: 0.75rem; font-weight: 600;">
+              <div style="display: flex; align-items: center; gap: 4px;"><span style="width: 8px; height: 8px; border-radius: 50%; background: var(--flight-color);"></span> Flight</div>
+              <div style="display: flex; align-items: center; gap: 4px;"><span style="width: 8px; height: 8px; border-radius: 50%; background: var(--stay-color);"></span> Stay</div>
+              <div style="display: flex; align-items: center; gap: 4px;"><span style="width: 8px; height: 8px; border-radius: 50%; background: var(--activity-color);"></span> Activity</div>
+              <div style="display: flex; align-items: center; gap: 4px;"><span style="width: 8px; height: 8px; border-radius: 50%; background: var(--transit-color);"></span> Transit</div>
+          </div>
+
           <span class="week-range" style="font-weight: 700; color: var(--border-color);">${weekRange}</span>
         </header>
 

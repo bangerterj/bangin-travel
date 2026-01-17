@@ -140,29 +140,41 @@ export function renderStayForm(stay = null) {
             <option value="hotel" ${data.type === 'hotel' ? 'selected' : ''}>Hotel</option>
             <option value="airbnb" ${data.type === 'airbnb' ? 'selected' : ''}>Airbnb</option>
             <option value="hostel" ${data.type === 'hostel' ? 'selected' : ''}>Hostel</option>
+            <option value="camping" ${data.type === 'camping' ? 'selected' : ''}>Camping</option>
           </select>
         </div>
 
         <div class="form-group">
             <label for="title">Name</label>
-            <input type="text" name="title" value="${data.title || data.name || ''}" placeholder="e.g. Shinjuku Granbell" required>
+            <input type="text" name="title" value="${data.title || data.name || ''}" placeholder="e.g. Shinjuku Granbell" required class="form-input">
         </div>
 
         <div class="form-group">
             <label for="address">Address</label>
-            <input type="text" name="address" value="${data.address}" placeholder="e.g. 2-14-5 Kabukicho" required>
+            <input type="text" name="address" value="${data.address}" placeholder="e.g. 2-14-5 Kabukicho" required class="form-input">
         </div>
 
+        <!-- Dates -->
+        <div class="form-group">
+            <label>Dates</label>
+            <input type="text" id="stay-range-picker" class="form-input" placeholder="Select dates..." required>
+        </div>
+
+        <!-- Times -->
         <div class="form-row">
             <div class="form-group">
-                <label for="checkIn">Check In</label>
-                <input type="datetime-local" name="checkIn" value="${formatDateForInput(data.checkIn)}" required>
+                <label>Check-in Time</label>
+                <input type="text" id="stay-checkin-time" class="form-input time-picker" value="${data.checkIn ? new Date(data.checkIn).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '15:00'}" required>
             </div>
             <div class="form-group">
-                <label for="checkOut">Check Out</label>
-                <input type="datetime-local" name="checkOut" value="${formatDateForInput(data.checkOut)}" required>
+                <label>Check-out Time</label>
+                <input type="text" id="stay-checkout-time" class="form-input time-picker" value="${data.checkOut ? new Date(data.checkOut).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '11:00'}" required>
             </div>
         </div>
+
+        <!-- Hidden inputs for validation/submission -->
+        <input type="hidden" name="checkIn" id="checkIn" value="${data.checkIn || ''}">
+        <input type="hidden" name="checkOut" id="checkOut" value="${data.checkOut || ''}">
 
 
 

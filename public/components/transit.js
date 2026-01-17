@@ -164,16 +164,24 @@ export function renderTransitForm(transit = null) {
             </div>
         </div>
 
+        <div class="form-group">
+            <label>Date Range (Dep ➝ Arr)</label>
+            <input type="text" id="transit-range-picker" class="form-input" placeholder="Select travel dates..." required>
+        </div>
+
         <div class="form-row">
             <div class="form-group">
-                <label for="departureTime">Dep Time</label>
-                <input type="datetime-local" name="departureTime" value="${formatDateForInput(data.departureTime)}" required>
+                <label>Dep Time</label>
+                <input type="text" id="transit-dep-time-picker" class="form-input" value="${data.departureTime ? new Date(data.departureTime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '09:00'}" required>
             </div>
             <div class="form-group">
-                <label for="arrivalTime">Arr Time</label>
-                <input type="datetime-local" name="arrivalTime" value="${formatDateForInput(data.arrivalTime)}" required>
+                <label>Arr Time</label>
+                <input type="text" id="transit-arr-time-picker" class="form-input" value="${data.arrivalTime ? new Date(data.arrivalTime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '10:00'}" required>
             </div>
         </div>
+
+        <input type="hidden" name="departureTime" id="departureTime" value="${data.departureTime || ''}">
+        <input type="hidden" name="arrivalTime" id="arrivalTime" value="${data.arrivalTime || ''}">
 
         <div class="form-row">
             <div class="form-group">

@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { useState, useEffect } from 'react';
+import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 
 export default function SignIn() {
+    const { data: session, status } = useSession();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [step, setStep] = useState('email'); // 'email' | 'password' | 'link-sent'
@@ -10,7 +11,19 @@ export default function SignIn() {
     const [error, setError] = useState('');
     const [hasPassword, setHasPassword] = useState(false);
     const router = useRouter();
-    const callbackUrl = router.query.callbackUrl || '/';
+
+    // Prevent redirect loops: if callback is signin, default to home
+    let callbackUrl = router.query.callbackUrl || '/';
+    if (typeof callbackUrl === 'string' && callbackUrl.includes('/auth/signin')) {
+        callbackUrl = '/';
+    }
+
+    // Auto-redirect if already logged in
+    useEffect(() => {
+        if (status === 'authenticated') {
+            router.replace(callbackUrl);
+        }
+    }, [status, callbackUrl, router]);
 
     const handleCheckEmail = async (e) => {
         e.preventDefault();

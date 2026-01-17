@@ -215,16 +215,24 @@ export function renderActivityForm(activity = null) {
             <input type="text" name="location" value="${data.location}" placeholder="e.g. Toyosu, Tokyo" required>
         </div>
 
+        <div class="form-group">
+            <label>Date Range (Start ➝ End)</label>
+            <input type="text" id="activity-range-picker" class="form-input" placeholder="Select dates..." required>
+        </div>
+
         <div class="form-row">
             <div class="form-group">
-                <label for="startTime">Start Time</label>
-                <input type="datetime-local" name="startTime" value="${formatDateForInput(data.startTime)}" required>
+                <label>Start Time</label>
+                <input type="text" id="activity-start-time-picker" class="form-input" value="${data.startTime ? new Date(data.startTime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '10:00'}" required>
             </div>
             <div class="form-group">
-                <label for="endTime">End Time</label>
-                <input type="datetime-local" name="endTime" value="${formatDateForInput(data.endTime)}" required>
+                <label>End Time</label>
+                <input type="text" id="activity-end-time-picker" class="form-input" value="${data.endTime ? new Date(data.endTime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '12:00'}" required>
             </div>
         </div>
+
+        <input type="hidden" name="startTime" id="startTime" value="${data.startTime || ''}">
+        <input type="hidden" name="endTime" id="endTime" value="${data.endTime || ''}">
 
         <div class="form-group" style="display: flex; align-items: flex-end;">
              <label class="checkbox-label">
