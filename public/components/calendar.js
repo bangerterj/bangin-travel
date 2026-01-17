@@ -174,7 +174,7 @@ export function renderCalendar(container, store, callbacks) {
       for (let m = 0; m < 60; m += 15) {
         if (h === 0 && m === 0) continue; // Already added as top-most
         const top = (h + m / 60) * HOUR_HEIGHT + GRID_OFFSET;
-        gridLines.push(`<div class="slot-line ${m === 0 ? 'hour-line' : 'quarter-line'}" style="position: absolute; top: ${top}px; left: 0; right: 0; border-top: 1px solid ${m === 0 ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0.03)'}; height: 0; z-index: 1;"></div>`);
+        gridLines.push(`<div class="slot-line ${m === 0 ? 'hour-line' : 'quarter-line'}" style="position: absolute; top: ${top}px; left: 0; right: 0; border-top: 1px solid ${m === 0 ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0.03)'}; height: ${SLOT_HEIGHT}px; z-index: 1; pointer-events: none;"></div>`);
       }
     }
 

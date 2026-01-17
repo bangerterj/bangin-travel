@@ -3433,7 +3433,6 @@ h4 {
 
 /* Day Slots (The interactive grid area) */
 .day-slots {
-  flex: 1;
   position: relative;
   cursor: crosshair;
   touch-action: pan-y;
@@ -3489,6 +3488,12 @@ h4 {
   background: var(--activity-color);
   color: white;
   border-color: #d35400;
+}
+
+.slot-line {
+  box-sizing: border-box;
+  height: 15px !important;
+  pointer-events: none;
 }
 
 .item-title {
