@@ -907,10 +907,15 @@ export default function TimelineSandbox() {
     // Check on mount
     checkMobile();
 
-    // Listen for resize
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []); // Only run on mount
+    // Listen for resize - but ONLY update isMobile state, do NOT auto-switch view again
+    // (This allows user to manually switch to Week View on mobile if they want)
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 600);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []); // Only run on mount (checkMobile uses initial state, which is fine for "boot" logic)
 
   // Generate days based on view mode
   const days = useMemo(() => {
@@ -1314,6 +1319,7 @@ export default function TimelineSandbox() {
           overflow: hidden;
           width: 100%; /* Constrain to parent */
           max-width: 100%; /* Prevent overflow */
+          touch-action: pan-y; /* Allow vertical scroll */
         }
         
         /* Hour Labels Sidebar */
@@ -1462,7 +1468,7 @@ export default function TimelineSandbox() {
         /* Day Slots */
         :global(.day-slots) {
           cursor: crosshair;
-          touch-action: none;
+          touch-action: pan-y; /* Allow vertical scroll, disable browser touch gestures like zoom/swipe-nav if needed, but we want scroll */
           user-select: none;
           background: var(--white, #fff);
         }
