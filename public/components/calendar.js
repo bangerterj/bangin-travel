@@ -123,7 +123,7 @@ export function renderCalendar(container, store, callbacks) {
           </div>
         </div>
         
-        <button id="calendar-fab" class="calendar-fab hidden" style="position: absolute; bottom: 16px; right: 16px; width: 48px; height: 48px; border-radius: 50%; background: var(--accent-orange); color: white; border: 3px solid var(--border-color); box-shadow: 3px 3px 0 var(--border-color); font-size: 1.25rem; font-weight: bold; cursor: pointer; z-index: 100; display: flex; align-items: center; justify-content: center;">+</button>
+        <button id="calendar-fab" class="calendar-fab hidden" style="position: absolute; bottom: calc(16px + env(safe-area-inset-bottom)); right: 16px; width: 48px; height: 48px; border-radius: 50%; background: var(--accent-orange); color: white; border: 3px solid var(--border-color); box-shadow: 3px 3px 0 var(--border-color); font-size: 1.25rem; font-weight: bold; cursor: pointer; z-index: 100; display: flex; align-items: center; justify-content: center;">+</button>
       </div>
     `;
 

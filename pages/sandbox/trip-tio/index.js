@@ -1,6 +1,7 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Flatpickr from "react-flatpickr";
 import "flatpickr/dist/themes/airbnb.css"; // Clean theme
+import { format, eachDayOfInterval, isValid } from 'date-fns';
 import styles from "./styles.module.css";
 import { LocationSearch } from "../../../public/components/LocationSearch";
 
@@ -63,7 +64,24 @@ export default function TripTioSandbox() {
     const [previews, setPreviews] = useState([]);
     const [selectedPreview, setSelectedPreview] = useState(null);
     const [itinerary, setItinerary] = useState([]);
-    const [selectedItemIds, setSelectedItemIds] = useState(new Set()); // Added missing state
+    const [selectedItemIds, setSelectedItemIds] = useState(new Set());
+    const [scheduledItems, setScheduledItems] = useState([]); // Array of { item, date, time }
+    const [isImporting, setIsImporting] = useState(false);
+
+    // Helpers
+    const parseDurationMock = (str) => {
+        if (!str) return 60;
+        if (str.toLowerCase().includes('half')) return 240;
+        if (str.toLowerCase().includes('day')) return 480;
+        const match = str.match(/(\d+(\.\d+)?)/);
+        return match ? parseFloat(match[1]) * 60 : 60;
+    };
+
+    useEffect(() => {
+        if (step === "IMPORT_REVIEW") {
+            generateSchedule();
+        }
+    }, [step]);
 
     // Refs for scrolling
     const containerRef = useRef(null);
@@ -212,6 +230,196 @@ export default function TripTioSandbox() {
             newSet.add(index);
         }
         setSelectedItemIds(newSet);
+    };
+
+    const generateSchedule = () => {
+        let dates = [];
+        try {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            if (isValid(start) && isValid(end)) {
+                dates = eachDayOfInterval({ start, end });
+            }
+        } catch (e) { }
+        if (dates.length === 0) dates = [new Date()];
+
+        const selectedIndices = Array.from(selectedItemIds);
+        const inputItems = selectedIndices.map(i => itinerary[i]);
+
+        // Split by category
+        const diningItems = inputItems.filter(i => i.category === 'Dining' || i.title.toLowerCase().includes('restaurant') || i.title.toLowerCase().includes('dinner'));
+        const activityItems = inputItems.filter(i => !diningItems.includes(i));
+
+        let slots = [];
+
+        dates.forEach((date, i) => {
+            const isFirst = i === 0;
+            const isLast = i === dates.length - 1;
+
+            if (isFirst) {
+                slots.push({ date, h: 19, m: 0, type: 'dining', label: 'Welcome Dinner' });
+            } else if (isLast && dates.length > 1) {
+                slots.push({ date, h: 10, m: 0, type: 'activity', label: 'Farewell Activity' });
+            } else {
+                // Core Day Slots
+                // 1. Morning Activity (All paces)
+                slots.push({ date, h: 10, m: 0, type: 'activity', label: 'Morning Exploration' });
+
+                // 2. Lunch (Balanced+)
+                if (pace >= 35) {
+                    slots.push({ date, h: 13, m: 0, type: 'dining', label: 'Lunch' });
+                }
+
+                // 3. Afternoon Activity (Packed+)
+                if (pace >= 60) {
+                    slots.push({ date, h: 15, m: 0, type: 'activity', label: 'Afternoon Adventure' });
+                }
+
+                // 4. Dinner (All paces) - Late to allow for day
+                slots.push({ date, h: 19, m: 30, type: 'dining', label: 'Dinner' });
+
+                // 5. Late Activity (Super Packed)
+                if (pace >= 80) {
+                    slots.push({ date, h: 21, m: 30, type: 'activity', label: 'Nightlife' });
+                }
+            }
+        });
+
+        // Sort slots by time (important for correct order)
+        slots.sort((a, b) => {
+            if (a.date.getTime() !== b.date.getTime()) return a.date - b.date;
+            return a.h - b.h;
+        });
+
+        const scheduled = [];
+
+        slots.forEach(slot => {
+            let item = null;
+            if (slot.type === 'dining' && diningItems.length) item = diningItems.shift();
+            else if (activityItems.length) item = activityItems.shift();
+            else if (diningItems.length) item = diningItems.shift(); // Fallback
+
+            if (item) {
+                const d = new Date(slot.date);
+                d.setHours(slot.h, slot.m);
+                scheduled.push({
+                    ...item,
+                    assignedDate: d,
+                    timeHint: slot.label
+                });
+            }
+        });
+
+        // Handle Leftovers - Append to core days if any
+        if (activityItems.length > 0 || diningItems.length > 0) {
+            const coreDays = dates.filter((_, i) => i !== 0 && i !== dates.length - 1);
+            const targetDays = coreDays.length > 0 ? coreDays : dates;
+
+            let dayIdx = 0;
+            while (activityItems.length > 0) {
+                const item = activityItems.shift();
+                const d = new Date(targetDays[dayIdx % targetDays.length]);
+                d.setHours(16, 30); // Late afternoon overflow
+                scheduled.push({ ...item, assignedDate: d, timeHint: 'Extra Activity' });
+                dayIdx++;
+            }
+            while (diningItems.length > 0) {
+                const item = diningItems.shift();
+                const d = new Date(targetDays[dayIdx % targetDays.length]);
+                d.setHours(21, 0); // Late night overflow
+                scheduled.push({ ...item, assignedDate: d, timeHint: 'Late Night Bite' });
+                dayIdx++;
+            }
+        }
+
+        // Sort final schedule
+        scheduled.sort((a, b) => new Date(a.assignedDate) - new Date(b.assignedDate));
+
+        setScheduledItems(scheduled);
+    };
+
+    const importTrip = async () => {
+        setIsImporting(true);
+        console.log("Starting Import...");
+        try {
+            // Date Format Utility - Ensure YYYY-MM-DD
+            const formatDateAPI = (d) => {
+                if (typeof d === 'string' && d.match(/^\d{4}-\d{2}-\d{2}$/)) return d;
+                try { return d ? format(new Date(d), 'yyyy-MM-dd') : ''; } catch (e) { return ''; }
+            };
+
+            const payload = {
+                name: `Trip to ${destination.split(',')[0]}`,
+                destination,
+                startDate: formatDateAPI(startDate),
+                endDate: formatDateAPI(endDate)
+            };
+
+            console.log("Creating Trip Payload:", payload);
+
+            // 1. Create Trip
+            const tripRes = await fetch('/api/trips', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!tripRes.ok) {
+                const txt = await tripRes.text();
+                console.error("Trip creation failed:", txt);
+                throw new Error(txt);
+            }
+
+            const trip = await tripRes.json();
+            console.log("Trip Created Details:", trip);
+
+            if (trip.id) {
+                // 2. Add Items
+                console.log(`Adding ${scheduledItems.length} items...`);
+
+                for (const item of scheduledItems) {
+                    const startAt = new Date(item.assignedDate);
+                    const durationMins = parseDurationMock(item.duration);
+                    const endAt = new Date(startAt.getTime() + durationMins * 60000);
+
+                    let type = 'activity';
+                    if (item.category === 'Stay' || item.title.toLowerCase().includes('hotel')) type = 'stay';
+
+                    const itemPayload = {
+                        type,
+                        title: item.title,
+                        notes: item.description,
+                        startAt: startAt.toISOString(),
+                        endAt: endAt.toISOString(),
+                        status: 'planned',
+                        metadata: {
+                            category: item.category,
+                            neighborhood: item.neighborhood,
+                            timeHint: item.timeHint,
+                        }
+                    };
+
+                    console.log("Adding Item:", item.title, startAt.toISOString());
+
+                    const itemRes = await fetch(`/api/trips/${trip.id}/items`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(itemPayload)
+                    });
+
+                    if (!itemRes.ok) {
+                        console.error("Item Failed:", item.title, await itemRes.text());
+                    }
+                }
+                console.log("Import Complete!");
+                setStep("IMPORT_SUCCESS");
+            }
+        } catch (e) {
+            console.error("Import Error:", e);
+            alert("Error importing trip: " + e.message);
+        } finally {
+            setIsImporting(false);
+        }
     };
 
     // --- Mobile Swiper Logic ---
@@ -597,7 +805,101 @@ export default function TripTioSandbox() {
                     </div>
                 )}
 
+                {/* Step 10: Import Review */}
+                {step === "IMPORT_REVIEW" && (
+                    <div className="animate-fade-in">
+                        <h2 className={styles.question}>Review your trip</h2>
+                        <div className={styles.insightBox} style={{ background: '#e0f2f1', borderColor: '#00695c', color: '#004d40' }}>
+                            We've drafted a schedule for your {selectedItemIds.size} items. You can refine dates & times after importing.
+                        </div>
+
+                        <div className={styles.calendarGrid} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px', marginTop: '20px' }}>
+                            {(() => {
+                                let dates = [];
+                                try {
+                                    if (startDate && endDate) {
+                                        const start = new Date(startDate);
+                                        const end = new Date(endDate);
+                                        if (isValid(start) && isValid(end)) {
+                                            dates = eachDayOfInterval({ start, end });
+                                        }
+                                    }
+                                } catch (e) { }
+                                if (dates.length === 0) dates = [new Date()];
+
+                                return dates.map((date, dayIdx) => {
+                                    const isFirst = dayIdx === 0;
+                                    const isLast = dayIdx === dates.length - 1;
+
+                                    // Filter from State
+                                    const dayPlan = scheduledItems.filter(item =>
+                                        format(new Date(item.assignedDate), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
+                                    ).sort((a, b) => new Date(a.assignedDate) - new Date(b.assignedDate));
+
+                                    return (
+                                        <div key={dayIdx} style={{ background: '#f8fafc', padding: '15px', borderRadius: '12px', border: '1px solid #e2e8f0', minHeight: '160px', opacity: isFirst ? 0.9 : 1 }}>
+                                            <div style={{
+                                                paddingBottom: '10px', marginBottom: '10px', borderBottom: '1px solid #e2e8f0',
+                                                display: 'flex', justifyContent: 'space-between', alignItems: 'baseline'
+                                            }}>
+                                                <span style={{ color: '#2c3e50', fontWeight: 'bold', fontFamily: 'Outfit' }}>{format(date, 'EEE, MMM d')}</span>
+                                                <span style={{ fontSize: '0.65rem', color: '#95a5a6', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '0.5px' }}>
+                                                    {isFirst ? 'TRAVEL DAY' : isLast ? 'DEPARTURE' : `DAY ${dayIdx + 1}`}
+                                                </span>
+                                            </div>
+
+                                            {isFirst && dayPlan.length === 0 && (
+                                                <div style={{ fontSize: '0.8rem', color: '#7f8c8d', background: 'rgba(0,0,0,0.03)', padding: '8px', borderRadius: '6px', marginBottom: '10px' }}>
+                                                    ✈️ Travel & Arrival
+                                                </div>
+                                            )}
+
+                                            {dayPlan.length === 0 && !isFirst ? (
+                                                <div style={{ fontSize: '0.8rem', color: '#bdc3c7', fontStyle: 'italic', padding: '10px' }}>Open Schedule</div>
+                                            ) : (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                    {dayPlan.map((item, i) => (
+                                                        <div key={i} style={{ background: 'white', padding: '10px', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', borderLeft: item.category === 'Dining' ? '3px solid #e67e22' : '3px solid #3498db' }}>
+                                                            <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#34495e', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <span>{item.title}</span>
+                                                                <span style={{ fontSize: '0.7rem', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', color: '#64748b', fontWeight: 600 }}>
+                                                                    {format(new Date(item.assignedDate), 'h:mm a')}
+                                                                </span>
+                                                            </div>
+                                                            <div style={{ fontSize: '0.75rem', color: '#7f8c8d', marginTop: '4px' }}>
+                                                                {item.duration || 'Flexible'} {item.neighborhood && `• ${item.neighborhood}`}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.75rem', color: '#95a5a6', fontStyle: 'italic', marginTop: '4px', lineHeight: '1.3' }}>{item.description}</div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                });
+                            })()}
+                        </div>
+
+                        <div style={{ marginTop: '30px', display: 'flex', gap: '10px' }}>
+                            <button className={styles.secondaryButton} onClick={() => setStep("ITINERARY")}>Back</button>
+                            <button className={styles.button} onClick={() => setStep("IMPORT_SUCCESS")}>Import Trip 🚀</button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Step 11: Success */}
+                {step === "IMPORT_SUCCESS" && (
+                    <div className="animate-fade-in" style={{ textAlign: 'center', padding: '60px 0' }}>
+                        <div style={{ fontSize: '5rem', marginBottom: '20px' }}>🎉</div>
+                        <h2 className={styles.question}>Trip Created!</h2>
+                        <p style={{ fontSize: '1.2rem', color: '#5d6d7e', marginBottom: '40px' }}>
+                            Your itinerary for <strong>{destination.split(',')[0]}</strong> has been saved.
+                        </p>
+                        <button className={styles.button} onClick={() => window.location.href = '/'}>Go to Dashboard</button>
+                    </div>
+                )}
+
             </div>
-        </div>
+        </div >
     );
 }

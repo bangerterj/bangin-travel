@@ -59,7 +59,10 @@ export default function Register() {
     return (
         <div className="auth-container">
             <div className="auth-card">
-                <h1>🚐 TRIPT.IO</h1>
+                <h1 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', fontSize: '2.5rem' }}>
+                    <img src="/logo.png" alt="TRIPT.IO" style={{ height: '1.0em' }} />
+                    <span><span style={{ color: '#2c3e50' }}>TRIPT</span><span style={{ color: '#f39c12' }}>.IO</span></span>
+                </h1>
                 <p>Create a new account</p>
 
                 <form onSubmit={handleRegister}>

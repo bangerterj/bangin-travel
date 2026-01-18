@@ -97,6 +97,47 @@ body {
   font-family: var(--font-body);
   line-height: 1.6;
   min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* ============================================
+   BRANDING
+   ============================================ */
+.brand {
+  display: flex;
+  align-items: center;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 2.25rem;
+  /* Larger text */
+  color: var(--dark-ink);
+  letter-spacing: -1px;
+  /* Tighter tracking */
+  cursor: pointer;
+  text-decoration: none;
+  gap: 8px;
+  /* Use gap instead of margin for consistent spacing */
+}
+
+.brand-logo-img {
+  height: 56px;
+  /* Larger logo */
+  width: auto;
+  margin-right: 0;
+  /* Let gap handle it */
+  display: block;
+}
+
+.brand-text-main {
+  color: var(--dark-ink);
+}
+
+.brand-text-suffix {
+  color: var(--accent-orange);
+}
+
+.brand-icon {
+  display: none;
 }
 
 /* ============================================
@@ -3739,6 +3780,7 @@ h4 {
   color: var(--text-primary);
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

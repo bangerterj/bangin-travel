@@ -97,6 +97,7 @@ export function renderSummary(container, store, callbacks) {
           max-height: 50vh;
           overflow-y: auto;
           border-top: 1px solid var(--border-color, #e0e0e0);
+          padding-bottom: calc(24px + env(safe-area-inset-bottom));
         ">
           <div class="drag-handle" style="
             width: 40px; 

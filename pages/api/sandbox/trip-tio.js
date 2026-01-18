@@ -51,21 +51,36 @@ export default async function handler(req, res) {
         }
 
         if (action === "previews") {
+            let targetCount = 8; // Default
+            try {
+                const start = new Date(startDate);
+                const end = new Date(endDate);
+                const days = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
+
+                // Density: Chill (1), Balanced (1.6), Packed (3)
+                let density = 1.6;
+                if (pace < 35) density = 1;
+                else if (pace > 65) density = 3;
+
+                const coreDays = Math.max(0, days - 2);
+                // Travel days (2) get 1 item each. Core days get density.
+                targetCount = Math.ceil((coreDays * density) + 2);
+                targetCount = Math.max(3, Math.min(targetCount, 25));
+            } catch (e) { }
+
             const prompt = `
         Act as an expert travel planner called Trip Tio.
         Plan 3 distinct trip previews for:
         - Destination: ${destination}
         - Dates: ${startDate} to ${endDate}
         - Vibe: ${vibe?.join(", ")}
-        - Pace: ${pace} (approximate daily density)
+        - Pace: ${pace} (0=Chill, 100=Packed)
         - Group: ${companions}
 
         Goal: Create 3 diverse, high-quality itinerary concepts.
         Instead of a day-by-day schedule, provide a curated list of the "Top Experiences" included in each plan.
-        - For a weekend trip, list ~5-8 experiences/activities per plan.
-        - For a week+ trip, list ~10-15 experiences/activities per plan.
-        - Be realistic but inspiring. Include specific restaurants, hidden gems, and main attractions that fit the vibe.
-        - Ensure the items fit the pace.
+        - Based on the length and pace, provide roughly ${targetCount} items per plan.
+        - Be realistic but inspiring. Include specific restaurants, hidden gems, and main attractions.
 
         Return strictly Valid JSON array of 3 objects. No markdown formatting.
         Schema:
@@ -82,6 +97,8 @@ export default async function handler(req, res) {
                 "title": "String (Name of place/activity)",
                 "category": "Activity | Dining | Chill | Nightlife",
                 "duration": "String (e.g. 2h, Half-day)",
+                "timeHint": "String (Morning | Afternoon | Evening | Sunset)",
+                "neighborhood": "String (e.g. Downtown, Beachfront)",
                 "description": "String (Why it fits)"
               }
               // ... 5-15 items depending on length
