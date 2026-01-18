@@ -82,43 +82,10 @@ export function renderSummary(container, store, callbacks) {
         <div id="trip-map-react-root" style="height: 100%; width: 100%; z-index: 1;"></div>
         
         <!-- Bottom Detail Card (Hidden by default) -->
-        <div id="map-detail-card" class="map-detail-card" style="
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          background: white;
-          border-radius: 20px 20px 0 0;
-          box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
-          z-index: 1000;
-          transform: translateY(110%);
-          transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-          padding: 24px;
-          max-height: 50vh;
-          overflow-y: auto;
-          border-top: 1px solid var(--border-color, #e0e0e0);
-          padding-bottom: calc(24px + env(safe-area-inset-bottom));
-        ">
-          <div class="drag-handle" style="
-            width: 40px; 
-            height: 4px; 
-            background: #e0e0e0; 
-            border-radius: 2px; 
-            margin: 0 auto 16px auto;
-          "></div>
+        <div id="map-detail-card" class="map-detail-card">
+          <div class="drag-handle"></div>
           
-          <button id="close-detail-card" style="
-            position: absolute; 
-            top: 16px; 
-            right: 16px; 
-            background: none; 
-            border: none; 
-            font-size: 1.5rem; 
-            line-height: 1;
-            cursor: pointer;
-            color: #999;
-            padding: 8px;
-          ">×</button>
+          <button id="close-detail-card" class="close-btn">×</button>
 
           <div id="detail-card-content"></div>
         </div>
@@ -162,26 +129,31 @@ export function renderSummary(container, store, callbacks) {
     const dateStr = item.startTime ? new Date(item.startTime).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
 
     // Mini Card Content
+    // Mini Card Content
     content.innerHTML = `
-      <div class="mini-card-preview" style="display: flex; gap: 16px; align-items: center; cursor: pointer;">
-        <div class="mini-icon" style="
-           font-size: 2rem; 
-           background: var(--cream); 
-           width: 56px; height: 56px; 
-           border-radius: 12px; 
-           display: flex; align-items: center; justify-content: center;
-           border: 2px solid var(--border-color);
-        ">
+      <div class="mini-card-preview">
+        <div class="mini-icon">
            ${getItemIcon(type)}
         </div>
-        <div class="mini-info" style="flex: 1;">
-           <h3 style="margin: 0; font-size: 1.1rem; line-height: 1.2;">${item.title || item.name}</h3>
-           <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px;">
-              ${dateStr} • ${timeStr}
+        <div class="mini-info">
+           <h3 class="mini-title">${item.title || item.name}</h3>
+           
+           <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px;">
+               ${dateStr ? `
+                   <div class="mini-meta-badge">
+                       <span>📅</span> ${dateStr} ${timeStr ? `• ${timeStr}` : ''}
+                   </div>
+               ` : ''}
            </div>
-           ${item.location?.displayName ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">📍 ${item.location.displayName}</div>` : ''}
+
+           ${item.location?.displayName ? `
+               <div class="mini-location">
+                   <span style="flex-shrink: 0; margin-top: 1px;">📍</span> 
+                   <span style="overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${item.location.displayName}</span>
+               </div>
+           ` : ''}
         </div>
-        <div class="mini-arrow" style="font-size: 1.5rem; color: var(--text-muted);">›</div>
+        <div class="mini-arrow">→</div>
       </div>
     `;
 
