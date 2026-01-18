@@ -123,27 +123,38 @@ export default function TripTioSandbox() {
             setGroupSize(4);
 
             const mockItems = [
-                { title: "Teotihuacan Pyramids", category: "Activity", duration: "Half Day", description: "Ancient pyramids of the Sun and Moon." },
-                { title: "Anthropology Museum", category: "Activity", duration: "3h", description: "World-class museum of Mexican history." },
-                { title: "Frida Kahlo Museum", category: "Activity", duration: "1.5h", description: "The Blue House in Coyoacan." },
-                { title: "Chapultepec Castle", category: "Activity", duration: "2h", description: "Historic castle with city views." },
-                { title: "Xochimilco Boats", category: "Activity", duration: "Half Day", description: "Colorful trajinera boats on canals." },
-                { title: "Lucha Libre Wrestling", category: "Activity", duration: "3h", description: "Masked wrestling entertainment." },
-                { title: "Historic Center Walk", category: "Activity", duration: "2h", description: "Zocalo, Cathedral, and ruins." },
-                { title: "Coyoacan Market", category: "Activity", duration: "1h", description: "Traditional market with food and crafts." },
-                { title: "Soumaya Museum", category: "Activity", duration: "1.5h", description: "Iconic architecture and art collection." },
-                { title: "Palacio de Bellas Artes", category: "Activity", duration: "1h", description: "Stunning cultural center." },
-                { title: "Tacos al Pastor @ El Huequito", category: "Dining", duration: "1h", description: "Famous street tacos." },
-                { title: "Churros El Moro", category: "Dining", duration: "45m", description: "Historic churreria." },
-                { title: "Pujol", category: "Dining", duration: "3h", description: "World-renowned fine dining." },
-                { title: "Contramar", category: "Dining", duration: "2h", description: "Famous seafood lunch spot." },
-                { title: "Rosetta", category: "Dining", duration: "2h", description: "Italian-Mexican in a beautiful mansion." },
-                { title: "Cafe Nin", category: "Dining", duration: "1h", description: "Charming breakfast spot." },
-                { title: "Street Corn (Elotes)", category: "Dining", duration: "30m", description: "Classic street snack." },
-                { title: "Mezcal Tasting", category: "Dining", duration: "1.5h", description: "Sample artisanal mezcals." },
-                { title: "Maximo Bistrot", category: "Dining", duration: "2h", description: "Farm-to-table french fusion." },
-                { title: "Panaderia Rosetta", category: "Dining", duration: "30m", description: "Famous bakery (Guava roll!)." },
-                { title: "Roma Norte Stroll", category: "Activity", duration: "1.5h", description: "Walk through trendy neighborhood." }
+                // Hotel (Stay) - Spanning full trip
+                {
+                    title: "Condesa DF",
+                    category: "Stay",
+                    duration: "All Day",
+                    description: "Trendy boutique hotel in Condesa.",
+                    location: "Av. Veracruz 102, Roma Nte., CDMX",
+                    coordinates: { lat: 19.4204, lng: -99.1759 },
+                    stayDetails: { checkIn: format(nextMonday, 'yyyy-MM-dd'), checkOut: format(nextSunday, 'yyyy-MM-dd') }
+                },
+                // Activities
+                { title: "Teotihuacan Pyramids", category: "Activity", duration: "Half Day", description: "Ancient pyramids of the Sun and Moon.", location: "San Juan Teotihuacán", coordinates: { lat: 19.6926, lng: -98.8436 } },
+                { title: "Anthropology Museum", category: "Activity", duration: "3h", description: "World-class museum of Mexican history.", location: "Av. P.º de la Reforma s/n", coordinates: { lat: 19.4260, lng: -99.1863 } },
+                { title: "Frida Kahlo Museum", category: "Activity", duration: "1.5h", description: "The Blue House in Coyoacan.", location: "Londres 247, Del Carmen", coordinates: { lat: 19.3551, lng: -99.1625 } },
+                { title: "Chapultepec Castle", category: "Activity", duration: "2h", description: "Historic castle with city views.", location: "Bosque de Chapultepec I Secc", coordinates: { lat: 19.4204, lng: -99.1819 } },
+                { title: "Xochimilco Boats", category: "Activity", duration: "Half Day", description: "Colorful trajinera boats on canals.", location: "Embarcadero Nuevo Nativitas", coordinates: { lat: 19.2433, lng: -99.0917 } },
+                { title: "Lucha Libre Wrestling", category: "Activity", duration: "3h", description: "Masked wrestling entertainment.", location: "Arena México", coordinates: { lat: 19.4246, lng: -99.1504 } },
+                { title: "Historic Center Walk", category: "Activity", duration: "2h", description: "Zocalo, Cathedral, and ruins.", location: "Zocalo", coordinates: { lat: 19.4326, lng: -99.1332 } },
+                { title: "Coyoacan Market", category: "Activity", duration: "1h", description: "Traditional market with food and crafts.", location: "Ignacio Allende s/n, Del Carmen", coordinates: { lat: 19.3524, lng: -99.1628 } },
+                { title: "Soumaya Museum", category: "Activity", duration: "1.5h", description: "Iconic architecture and art collection.", location: "Blvd. Miguel de Cervantes Saavedra", coordinates: { lat: 19.4407, lng: -99.2047 } },
+                { title: "Palacio de Bellas Artes", category: "Activity", duration: "1h", description: "Stunning cultural center.", location: "Av. Juárez S/N, Centro Histórico", coordinates: { lat: 19.4352, lng: -99.1412 } },
+                { title: "Tacos al Pastor @ El Huequito", category: "Dining", duration: "1h", description: "Famous street tacos.", location: "Calle Pennsylvania 73", coordinates: { lat: 19.3905, lng: -99.1764 } },
+                { title: "Churros El Moro", category: "Dining", duration: "45m", description: "Historic churreria.", location: "Eje Central Lázaro Cárdenas 42", coordinates: { lat: 19.4320, lng: -99.1408 } },
+                { title: "Pujol", category: "Dining", duration: "3h", description: "World-renowned fine dining.", location: "Tennyson 133, Polanco", coordinates: { lat: 19.4321, lng: -99.1953 } },
+                { title: "Contramar", category: "Dining", duration: "2h", description: "Famous seafood lunch spot.", location: "Durango 200, Roma Nte.", coordinates: { lat: 19.4196, lng: -99.1678 } },
+                { title: "Rosetta", category: "Dining", duration: "2h", description: "Italian-Mexican in a beautiful mansion.", location: "Colima 166, Roma Nte.", coordinates: { lat: 19.4190, lng: -99.1604 } },
+                { title: "Cafe Nin", category: "Dining", duration: "1h", description: "Charming breakfast spot.", location: "Havre 73, Juárez", coordinates: { lat: 19.4269, lng: -99.1633 } },
+                { title: "Street Corn (Elotes)", category: "Dining", duration: "30m", description: "Classic street snack.", location: "Street Vendor", coordinates: { lat: 19.4150, lng: -99.1700 } },
+                { title: "Mezcal Tasting", category: "Dining", duration: "1.5h", description: "Sample artisanal mezcals.", location: "La Clandestina", coordinates: { lat: 19.4173, lng: -99.1664 } },
+                { title: "Maximo Bistrot", category: "Dining", duration: "2h", description: "Farm-to-table french fusion.", location: "Av. Álvaro Obregón 65", coordinates: { lat: 19.4199, lng: -99.1598 } },
+                { title: "Panaderia Rosetta", category: "Dining", duration: "30m", description: "Famous bakery (Guava roll!).", location: "Colima 179, Roma Nte.", coordinates: { lat: 19.4191, lng: -99.1602 } },
+                { title: "Roma Norte Stroll", category: "Activity", duration: "1.5h", description: "Walk through trendy neighborhood.", location: "Plaza Rio de Janeiro", coordinates: { lat: 19.4206, lng: -99.1635 } }
             ];
 
             setItinerary(mockItems);
@@ -471,6 +482,14 @@ export default function TripTioSandbox() {
                                 timeHint: item.timeHint,
                             }
                         };
+
+                        // Map Location if present
+                        if (item.location || item.coordinates) {
+                            itemPayload.metadata.location = {
+                                displayName: item.location || item.title,
+                                coordinates: item.coordinates || null
+                            };
+                        }
 
                         console.log(`POST Item: ${item.title} @ ${itemPayload.startAt}`);
 

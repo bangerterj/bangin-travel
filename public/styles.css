@@ -96,8 +96,11 @@ body {
   color: var(--dark-ink);
   font-family: var(--font-body);
   line-height: 1.6;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100vh;
+  /* Fixed height */
+  height: 100dvh;
+  overflow: hidden;
+  /* Prevent body scroll, handle in app-content */
 }
 
 /* ============================================
@@ -465,8 +468,9 @@ h4 {
 .main-header {
   background: var(--white);
   border-bottom: var(--border-width) solid var(--border-color);
-  position: sticky;
-  top: 0;
+  /* Sticky is not needed in flex layout if header is sibling of scroll pane, 
+     but we keep it or rely on flex order. Here we assume flex column. */
+  flex-shrink: 0;
   z-index: 100;
   padding: 0;
   /* Let children handle padding or grid gaps */
@@ -601,10 +605,29 @@ h4 {
   margin: 0 auto;
   padding: var(--space-xl);
   width: 100%;
+  overflow-y: auto;
+  /* Internal scroll */
+  -webkit-overflow-scrolling: touch;
 }
 
 .view {
-  animation: fadeIn 0.3s ease;
+  display: flex;
+  /* Flex to manage children */
+  flex-direction: column;
+  height: 100%;
+  /* Fill container */
+  overflow: hidden;
+  /* Default lock, allow specific children to scroll */
+}
+
+/* Ensure Trip View Scrolls */
+#trips-view {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.view.hidden {
+  display: none !important;
 }
 
 @keyframes fadeIn {
