@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useSession, signIn } from "next-auth/react";
 import Flatpickr from "react-flatpickr";
 import "flatpickr/dist/themes/airbnb.css"; // Clean theme
 import { format, eachDayOfInterval, isValid } from 'date-fns';
@@ -39,6 +40,8 @@ export default function TripTioSandbox() {
     const [step, setStep] = useState("DESTINATION");
     const [loading, setLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState("Initializing...");
+
+    const { data: session } = useSession();
 
     // User Data
     const [destination, setDestination] = useState("");
@@ -256,39 +259,40 @@ export default function TripTioSandbox() {
             const isFirst = i === 0;
             const isLast = i === dates.length - 1;
 
+            // Priority: 1=Morning (Start day), 2=Dinner (End day), 3=Lunch, 4=Afternoon, 5=Late
             if (isFirst) {
-                slots.push({ date, h: 19, m: 0, type: 'dining', label: 'Welcome Dinner' });
+                slots.push({ date, h: 19, m: 0, type: 'dining', label: 'Welcome Dinner', priority: 1 });
             } else if (isLast && dates.length > 1) {
-                slots.push({ date, h: 10, m: 0, type: 'activity', label: 'Farewell Activity' });
+                slots.push({ date, h: 10, m: 0, type: 'activity', label: 'Farewell Activity', priority: 1 });
             } else {
                 // Core Day Slots
-                // 1. Morning Activity (All paces)
-                slots.push({ date, h: 10, m: 0, type: 'activity', label: 'Morning Exploration' });
+                // 1. Morning Activity (All paces) - High Priority to ensure every day has a start
+                slots.push({ date, h: 10, m: 0, type: 'activity', label: 'Morning Exploration', priority: 1 });
 
-                // 2. Lunch (Balanced+)
+                // 2. Dinner (All paces) - High Priority to ensure every day has an end
+                slots.push({ date, h: 19, m: 30, type: 'dining', label: 'Dinner', priority: 2 });
+
+                // 3. Lunch (Balanced+)
                 if (pace >= 35) {
-                    slots.push({ date, h: 13, m: 0, type: 'dining', label: 'Lunch' });
+                    slots.push({ date, h: 13, m: 0, type: 'dining', label: 'Lunch', priority: 3 });
                 }
 
-                // 3. Afternoon Activity (Packed+)
+                // 4. Afternoon Activity (Packed+)
                 if (pace >= 60) {
-                    slots.push({ date, h: 15, m: 0, type: 'activity', label: 'Afternoon Adventure' });
+                    slots.push({ date, h: 15, m: 0, type: 'activity', label: 'Afternoon Adventure', priority: 4 });
                 }
-
-                // 4. Dinner (All paces) - Late to allow for day
-                slots.push({ date, h: 19, m: 30, type: 'dining', label: 'Dinner' });
 
                 // 5. Late Activity (Super Packed)
                 if (pace >= 80) {
-                    slots.push({ date, h: 21, m: 30, type: 'activity', label: 'Nightlife' });
+                    slots.push({ date, h: 21, m: 30, type: 'activity', label: 'Nightlife', priority: 5 });
                 }
             }
         });
 
-        // Sort slots by time (important for correct order)
+        // Sort slots by priority first (to distribute items evenly across days), then by date
         slots.sort((a, b) => {
-            if (a.date.getTime() !== b.date.getTime()) return a.date - b.date;
-            return a.h - b.h;
+            if (a.priority !== b.priority) return a.priority - b.priority;
+            return a.date - b.date; // Round robin
         });
 
         const scheduled = [];
@@ -375,42 +379,59 @@ export default function TripTioSandbox() {
 
             if (trip.id) {
                 // 2. Add Items
-                console.log(`Adding ${scheduledItems.length} items...`);
+                console.log(`Adding ${scheduledItems.length} items to Trip ${trip.id}...`);
 
-                for (const item of scheduledItems) {
-                    const startAt = new Date(item.assignedDate);
-                    const durationMins = parseDurationMock(item.duration);
-                    const endAt = new Date(startAt.getTime() + durationMins * 60000);
-
-                    let type = 'activity';
-                    if (item.category === 'Stay' || item.title.toLowerCase().includes('hotel')) type = 'stay';
-
-                    const itemPayload = {
-                        type,
-                        title: item.title,
-                        notes: item.description,
-                        startAt: startAt.toISOString(),
-                        endAt: endAt.toISOString(),
-                        status: 'planned',
-                        metadata: {
-                            category: item.category,
-                            neighborhood: item.neighborhood,
-                            timeHint: item.timeHint,
+                // Wait for all items to safeguard against race conditions or rate limits
+                await Promise.all(scheduledItems.map(async (item) => {
+                    try {
+                        const startAt = new Date(item.assignedDate);
+                        if (isNaN(startAt.getTime())) {
+                            console.error("Invalid Date for item:", item.title, item.assignedDate);
+                            return;
                         }
-                    };
 
-                    console.log("Adding Item:", item.title, startAt.toISOString());
+                        const durationMins = parseDurationMock(item.duration);
+                        const endAt = new Date(startAt.getTime() + durationMins * 60000);
 
-                    const itemRes = await fetch(`/api/trips/${trip.id}/items`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(itemPayload)
-                    });
+                        let type = 'activity';
+                        const catLower = (item.category || '').toLowerCase();
+                        if (catLower === 'stay' || item.title.toLowerCase().includes('hotel')) type = 'stay';
+                        else if (catLower === 'food' || catLower === 'dining') type = 'activity'; // Trip Tio treats dining as activity mostly, but DB has no 'dining' type? DB types: flight, stay, transit, activity. Dinner is an activity.
 
-                    if (!itemRes.ok) {
-                        console.error("Item Failed:", item.title, await itemRes.text());
+                        // DB 'items' table usually expects: type IN ('flight', 'stay', 'transit', 'activity')
+                        // We'll stick to 'activity' for food.
+
+                        const itemPayload = {
+                            type,
+                            title: item.title,
+                            notes: item.description,
+                            startAt: startAt.toISOString(),
+                            endAt: endAt.toISOString(),
+                            status: 'planned',
+                            metadata: {
+                                category: item.category,
+                                neighborhood: item.neighborhood,
+                                timeHint: item.timeHint,
+                            }
+                        };
+
+                        console.log(`POST Item: ${item.title} @ ${itemPayload.startAt}`);
+
+                        const itemRes = await fetch(`/api/trips/${trip.id}/items`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(itemPayload)
+                        });
+
+                        if (!itemRes.ok) {
+                            console.error("Item Failed:", item.title, await itemRes.text());
+                        } else {
+                            // console.log("Item Saved:", item.title);
+                        }
+                    } catch (err) {
+                        console.error("Item Loop Critical Error:", err);
                     }
-                }
+                }));
                 console.log("Import Complete!");
                 setStep("IMPORT_SUCCESS");
             }
@@ -882,7 +903,13 @@ export default function TripTioSandbox() {
 
                         <div style={{ marginTop: '30px', display: 'flex', gap: '10px' }}>
                             <button className={styles.secondaryButton} onClick={() => setStep("ITINERARY")}>Back</button>
-                            <button className={styles.button} onClick={() => setStep("IMPORT_SUCCESS")}>Import Trip 🚀</button>
+                            <button
+                                className={styles.button}
+                                onClick={session ? importTrip : () => signIn()}
+                                disabled={isImporting}
+                            >
+                                {session ? (isImporting ? "Importing..." : "Import Trip 🚀") : "Log in to Import"}
+                            </button>
                         </div>
                     </div>
                 )}
