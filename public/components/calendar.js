@@ -84,6 +84,10 @@ export function renderCalendar(container, store, callbacks) {
       ...trip.transit.map(t => ({ ...t, type: 'transit', startTime: t.startAt || t.departureTime, endTime: t.endAt || t.arrivalTime, title: t.title || t.name }))
     ];
 
+    // Capture scroll position before re-rendering
+    const existingScroll = container.querySelector('#timeline-scroll-area');
+    const savedScrollTop = existingScroll ? existingScroll.scrollTop : null;
+
     container.innerHTML = `
       <div class="timeline-calendar ${state.viewMode}-view" style="position: relative;">
         <header class="timeline-header" style="height: 52px; padding: 0 12px; border-bottom: 2px solid var(--border-color); box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; background: var(--cream);">
@@ -132,6 +136,15 @@ export function renderCalendar(container, store, callbacks) {
     // Sync Scroll: Sidebar moves with Grid vertically
     const scrollArea = container.querySelector('#timeline-scroll-area');
     const sidebar = container.querySelector('.hour-sidebar');
+
+    // Restore scroll position or set default to 6 AM
+    if (savedScrollTop !== null) {
+      scrollArea.scrollTop = savedScrollTop;
+    } else {
+      // 6 AM = 6 hours * 60px/hr + 16px offset = 376px
+      scrollArea.scrollTop = 376;
+    }
+
     scrollArea.onscroll = () => {
       sidebar.scrollTop = scrollArea.scrollTop;
     };

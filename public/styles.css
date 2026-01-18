@@ -186,6 +186,19 @@ body {
     width: 100%;
     justify-content: space-between;
   }
+
+  /* User Name Truncation */
+  .user-name-full {
+    display: none;
+  }
+
+  .user-name-short {
+    display: inline-block !important;
+  }
+}
+
+.user-name-short {
+  display: none;
 }
 
 /* ============================================

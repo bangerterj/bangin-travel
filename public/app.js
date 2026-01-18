@@ -487,7 +487,8 @@ class App {
             container.innerHTML = `
                 <button class="account-btn" id="header-account-btn" title="Account Settings">
                     <span>👤</span>
-                    <span>${session.user.name || 'Account'}</span>
+                    <span class="user-name-full">${session.user.name || 'Account'}</span>
+                    <span class="user-name-short">${(session.user.name || 'Account').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}</span>
                 </button>
             `;
             const headerBtn = document.getElementById('header-account-btn');
