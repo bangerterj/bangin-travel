@@ -141,6 +141,6 @@ async function createItem(req, res, tripId) {
         return res.status(201).json(item);
     } catch (error) {
         console.error('Create item error:', error);
-        return res.status(500).json({ error: 'Failed to create item' });
+        return res.status(500).json({ error: error.message || 'Failed to create item' });
     }
 }

@@ -416,9 +416,9 @@ class App {
             this.showView('trips'); // Use trips container for login prompt
             this.tripsContainer.innerHTML = `
                 <div class="login-prompt">
-                    <h2 style="display: flex; align-items: center; justify-content: center; font-size: 2.5rem; gap: 12px;">
-                        <img src="logo.png" alt="TRIPT.IO" style="height: 1.2em;">
-                        <span><span style="color: var(--dark-ink)">TRIPT</span><span style="color: var(--accent-orange)">.IO</span></span>
+                    <h2 class="brand-header-container login-brand">
+                        <img src="logo.png" alt="TRIPT.IO" class="brand-logo-responsive">
+                        <span><span class="brand-text-main">TRIPT</span><span class="brand-text-suffix">.IO</span></span>
                     </h2>
                     <p>Sign in to view and manage your trips.</p>
                     <a href="/api/auth/signin" class="btn btn-primary">
@@ -1940,6 +1940,11 @@ class App {
                     if (res.ok) {
                         await store.fetchTrips();
                         this.closeModal();
+
+                        if (isArchiving) {
+                            store.setActiveTrip(null);
+                        }
+
                         this.render();
                         this.showToast(isArchiving ? '📦 Archived' : '📥 Revived');
                     } else {

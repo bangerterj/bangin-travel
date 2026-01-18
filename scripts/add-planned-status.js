@@ -3,6 +3,7 @@
  */
 
 const { Pool } = require('pg');
+require('dotenv').config({ path: '.env.local' });
 
 async function migrate() {
     const pool = new Pool({

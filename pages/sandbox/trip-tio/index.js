@@ -100,6 +100,63 @@ export default function TripTioSandbox() {
         setStep("DATES");
     };
 
+    const loadMockPacked = () => {
+        setLoading(true);
+        setTimeout(() => {
+            setDestination("Mexico City, Mexico");
+
+            // Dates: Next Monday to next Sunday (7 days)
+            const today = new Date();
+            const nextMonday = new Date(today);
+            nextMonday.setDate(today.getDate() + (1 + 7 - today.getDay()) % 7 || 7);
+            const nextSunday = new Date(nextMonday);
+            nextSunday.setDate(nextMonday.getDate() + 6);
+
+            setStartDate(format(nextMonday, 'yyyy-MM-dd'));
+            setEndDate(format(nextSunday, 'yyyy-MM-dd'));
+            setDateRange([nextMonday, nextSunday]);
+
+            setPace(90); // Packed
+            setSelectedVibes(["History & culture", "Food & drinks"]);
+            setOtherVibe("Street food & ruins");
+            setCompanionType("Friends");
+            setGroupSize(4);
+
+            const mockItems = [
+                { title: "Teotihuacan Pyramids", category: "Activity", duration: "Half Day", description: "Ancient pyramids of the Sun and Moon." },
+                { title: "Anthropology Museum", category: "Activity", duration: "3h", description: "World-class museum of Mexican history." },
+                { title: "Frida Kahlo Museum", category: "Activity", duration: "1.5h", description: "The Blue House in Coyoacan." },
+                { title: "Chapultepec Castle", category: "Activity", duration: "2h", description: "Historic castle with city views." },
+                { title: "Xochimilco Boats", category: "Activity", duration: "Half Day", description: "Colorful trajinera boats on canals." },
+                { title: "Lucha Libre Wrestling", category: "Activity", duration: "3h", description: "Masked wrestling entertainment." },
+                { title: "Historic Center Walk", category: "Activity", duration: "2h", description: "Zocalo, Cathedral, and ruins." },
+                { title: "Coyoacan Market", category: "Activity", duration: "1h", description: "Traditional market with food and crafts." },
+                { title: "Soumaya Museum", category: "Activity", duration: "1.5h", description: "Iconic architecture and art collection." },
+                { title: "Palacio de Bellas Artes", category: "Activity", duration: "1h", description: "Stunning cultural center." },
+                { title: "Tacos al Pastor @ El Huequito", category: "Dining", duration: "1h", description: "Famous street tacos." },
+                { title: "Churros El Moro", category: "Dining", duration: "45m", description: "Historic churreria." },
+                { title: "Pujol", category: "Dining", duration: "3h", description: "World-renowned fine dining." },
+                { title: "Contramar", category: "Dining", duration: "2h", description: "Famous seafood lunch spot." },
+                { title: "Rosetta", category: "Dining", duration: "2h", description: "Italian-Mexican in a beautiful mansion." },
+                { title: "Cafe Nin", category: "Dining", duration: "1h", description: "Charming breakfast spot." },
+                { title: "Street Corn (Elotes)", category: "Dining", duration: "30m", description: "Classic street snack." },
+                { title: "Mezcal Tasting", category: "Dining", duration: "1.5h", description: "Sample artisanal mezcals." },
+                { title: "Maximo Bistrot", category: "Dining", duration: "2h", description: "Farm-to-table french fusion." },
+                { title: "Panaderia Rosetta", category: "Dining", duration: "30m", description: "Famous bakery (Guava roll!)." },
+                { title: "Roma Norte Stroll", category: "Activity", duration: "1.5h", description: "Walk through trendy neighborhood." }
+            ];
+
+            setItinerary(mockItems);
+            setSelectedItemIds(new Set(mockItems.map((_, i) => i)));
+
+            // Mock preview obj for context
+            setSelectedPreview({ title: "Mock Packed Trip", theme: "Ultimate Mexico City", pace: "Packed" });
+
+            setStep("IMPORT_REVIEW");
+            setLoading(false);
+        }, 500);
+    };
+
     const formatDate = (date) => {
         if (!date) return "";
         // Handle timezone offset so we don't jump back a day
@@ -467,8 +524,12 @@ export default function TripTioSandbox() {
             <header className={styles.hero}>
                 <h1 className={styles.title}>Trip Tio Sandbox</h1>
                 <p className={styles.subtitle}>AI-powered travel planning prototype</p>
+                <p className={styles.subtitle}>AI-powered travel planning prototype</p>
                 {step === "DESTINATION" && (
-                    <button onClick={loadExample} className={styles.secondaryButton} style={{ marginTop: '10px' }}>Load Example (Munich)</button>
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '10px' }}>
+                        <button onClick={loadExample} className={styles.secondaryButton}>Load Example (Munich)</button>
+                        <button onClick={loadMockPacked} className={styles.secondaryButton} style={{ borderColor: '#e67e22', color: '#e67e22' }}>⚡ Mock (Packed 7-Day)</button>
+                    </div>
                 )}
             </header>
 

@@ -51,9 +51,9 @@ export function renderTripSelector(container, store, callbacks) {
     <div class="trips-container">
       <div class="trips-header">
         <div class="header-top" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-            <h1 class="brand-title" style="display: flex; align-items: center; font-size: 2.5rem; gap: 12px;">
-                <img src="logo.png" alt="TRIPT.IO" style="height: 1.0em;">
-                <span><span style="color: var(--dark-ink)">TRIPT</span><span style="color: var(--accent-orange)">.IO</span></span>
+            <h1 class="brand-title brand-header-container">
+                <img src="logo.png" alt="TRIPT.IO" class="brand-logo-responsive">
+                <span><span class="brand-text-main">TRIPT</span><span class="brand-text-suffix">.IO</span></span>
             </h1>
             <div class="auth-controls">
                 ${store.getSession() ? `
